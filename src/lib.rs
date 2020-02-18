@@ -63,7 +63,7 @@ mod tests {
         }
 
         token_list
-            .and(space.skip::<String>().and(token_list).multiple().maybe())
+            .and(space.skip(token_list).multiple().maybe())
             .maybe()
             .drop(space.maybe())
             .end()
@@ -141,8 +141,7 @@ mod tests {
 
     fn string<L: Span>(source: &str, location: L) -> ParseResult<SExpression<L>, L> {
         character('"')
-            .skip::<String>()
-            .and(
+            .skip(
                 any_character
                     .condition(&|c: &String| c != "\"")
                     .or(character('\\').and(character('"')))
@@ -167,16 +166,9 @@ mod tests {
 
         character('(')
             .and(expr_space.maybe())
-            .skip::<String>()
-            .and(
+            .skip(
                 expression_list
-                    .and(
-                        expr_space
-                            .skip::<String>()
-                            .and(expression_list)
-                            .multiple()
-                            .maybe(),
-                    )
+                    .and(expr_space.skip(expression_list).multiple().maybe())
                     .drop(expr_space.maybe())
                     .maybe()
                     .drop(expr_space.maybe().and(character(')'))),

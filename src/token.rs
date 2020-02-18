@@ -347,8 +347,7 @@ impl Digits {
 
 pub fn string_literal<L: Span>(source: &str, location: L) -> ParseResult<String, L> {
     character('"')
-        .skip::<String>()
-        .and(
+        .skip(
             any_character
                 .condition(|c: &String| !c.chars().any(|c| c == '"'))
                 .or(character('\\').and('"'))

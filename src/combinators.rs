@@ -35,8 +35,8 @@ pub trait ParserExt<T, L>: Parser<T, L> + Sized {
         Drop(self, other, PhantomData)
     }
 
-    fn skip<V>(self) -> Skip<Self, T> {
-        Skip(self, PhantomData)
+    fn skip<V, P: Parser<V, L>>(self, keep: P) -> Skip<Self, P, T> {
+        Skip(self, keep, PhantomData)
     }
 
     fn matching(self, compare: T) -> Matching<Self, T> {
@@ -203,16 +203,17 @@ where
     }
 }
 
-pub struct Skip<P, V>(P, PhantomData<V>);
+pub struct Skip<P, Q, T>(P, Q, PhantomData<T>);
 
-impl<P, T: List + Clone, V, L: Span> Parser<T, L> for Skip<P, V>
+impl<P, Q, T, V, L: Span> Parser<V, L> for Skip<P, Q, T>
 where
-    P: Parser<V, L>,
+    P: Parser<T, L>,
+    Q: Parser<V, L>,
 {
-    fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, T, L> {
+    fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, V, L> {
         self.0
             .parse(source, location)
-            .and_then(&|_, source, location| ParseResult::success(T::new(), source, location))
+            .and_then(&|_, source, location| self.1.parse(source, location))
     }
 }
 
