@@ -120,14 +120,12 @@ impl<'s, T, L: Clone> ParseResult<'s, T, L> {
         Self::parsed(Parse::new(value, location.clone()), source, location)
     }
 
-    pub fn meta_map<A, F>(self, map: &F) -> ParseResult<'s, A, L>
-    where
-        F: Fn(Meta<T, L>) -> A,
-    {
+    pub fn meta(self) -> ParseResult<'s, Meta<T, L>, L> {
         let ParseResult { parsed, errors } = self;
         let parsed = parsed
             .into_iter()
-            .map(|(v, r, l)| (v.meta_map(map), r, l))
+            .map(|(v, r, l)| (v.into_inner().split(), r, l))
+            .map(|((v, s), r, l)| (Parse::new(Meta::new(v, s.clone()), s), r, l))
             .collect();
         ParseResult { parsed, errors }
     }
@@ -239,14 +237,6 @@ impl<T, L> Parse<T, L> {
 
     pub fn into_inner(self) -> Meta<T, L> {
         self.0
-    }
-}
-
-impl<T, L: Clone> Parse<T, L> {
-    pub fn meta_map<A>(self, map: &impl Fn(Meta<T, L>) -> A) -> Parse<A, L> {
-        let (value, location) = self.into_inner().split();
-        let meta = Meta::new(value, location.clone());
-        Parse::new(map(meta), location)
     }
 }
 

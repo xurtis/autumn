@@ -159,7 +159,10 @@ mod tests {
             source: &str,
             location: L,
         ) -> ParseResult<Vec<Meta<SExpression<L>, L>>, L> {
-            sexpression.parse(source, location).meta_map(&List::single)
+            sexpression
+                .meta()
+                .parse(source, location)
+                .map(&List::single)
         }
 
         character('(')

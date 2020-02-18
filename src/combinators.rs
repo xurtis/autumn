@@ -1,6 +1,6 @@
 //! Cominators for combining parsers
 
-use crate::location::Span;
+use crate::location::{Meta, Span};
 use crate::{parsers::empty, List, Parse, ParseResult, Parser};
 use std::marker::PhantomData;
 
@@ -48,6 +48,10 @@ pub trait ParserExt<T, L>: Parser<T, L> + Sized {
 
     fn end(self) -> End<Self> {
         End(self)
+    }
+
+    fn meta(self) -> MetaMap<Self> {
+        MetaMap(self)
     }
 }
 
@@ -241,5 +245,13 @@ impl<T, L: Span, P: Parser<T, L>> Parser<T, L> for End<P> {
                     ParseResult::none()
                 }
             })
+    }
+}
+
+pub struct MetaMap<P>(P);
+
+impl<T, L: Span, P: Parser<T, L>> Parser<Meta<T, L>, L> for MetaMap<P> {
+    fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, Meta<T, L>, L> {
+        self.0.parse(source, location).meta()
     }
 }
