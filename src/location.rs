@@ -258,7 +258,7 @@ impl<P: AsRef<Path> + Clone + fmt::Debug, I: Span + fmt::Debug> Span for FileSou
 }
 
 /// Structure to tag an object with a given location
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Meta<T, I> {
     inner: T,
     location: I,

@@ -11,7 +11,7 @@ pub enum Token {
 }
 use Token::*;
 
-pub fn token<L: Span>(source: &str, location: L) -> ParseResult<Token, L> {
+pub fn token<L: Span, E>(source: &str, location: L) -> ParseResult<Token, L, E> {
     identifier
         .map(Identifier)
         .or(number.map(NumberLiteral))
@@ -19,11 +19,11 @@ pub fn token<L: Span>(source: &str, location: L) -> ParseResult<Token, L> {
         .parse(source, location)
 }
 
-pub fn identifier<L: Span>(source: &str, location: L) -> ParseResult<String, L> {
-    fn ident_prefix<L: Span>(source: &str, location: L) -> ParseResult<String, L> {
+pub fn identifier<L: Span, E>(source: &str, location: L) -> ParseResult<String, L, E> {
+    fn ident_prefix<L: Span, E>(source: &str, location: L) -> ParseResult<String, L, E> {
         alphabetic.or('_').or('-').parse(source, location)
     }
-    fn ident_suffix<L: Span>(source: &str, location: L) -> ParseResult<String, L> {
+    fn ident_suffix<L: Span, E>(source: &str, location: L) -> ParseResult<String, L, E> {
         ident_prefix.or(digit).parse(source, location)
     }
 
@@ -48,7 +48,7 @@ pub enum Number {
     Real64(f64),
 }
 
-pub fn number<L: Span>(source: &str, location: L) -> ParseResult<Number, L> {
+pub fn number<L: Span, E>(source: &str, location: L) -> ParseResult<Number, L, E> {
     sign.and_then(|sign| base.map(move |base| (sign, base)))
         .and_then(number_prefix)
         .and_then(number_suffix)
@@ -62,7 +62,7 @@ enum SignedNumber {
     Real(f64, bool),
 }
 
-fn number_prefix<L: Span>((sign, base): (Sign, Base)) -> impl Parser<SignedNumber, L> {
+fn number_prefix<L: Span, E>((sign, base): (Sign, Base)) -> impl Parser<SignedNumber, L, E> {
     use Digits::*;
     use SignedNumber::*;
     closure(move |source, location| {
@@ -86,7 +86,7 @@ fn number_prefix<L: Span>((sign, base): (Sign, Base)) -> impl Parser<SignedNumbe
     })
 }
 
-fn number_suffix<L: Span>(number: SignedNumber) -> impl Parser<Number, L> {
+fn number_suffix<L: Span, E>(number: SignedNumber) -> impl Parser<Number, L, E> {
     use Number::*;
     use SignedNumber::*;
 
@@ -157,7 +157,7 @@ enum Sign {
     Positive,
 }
 
-fn sign<L: Span>(source: &str, location: L) -> ParseResult<Sign, L> {
+fn sign<L: Span, E>(source: &str, location: L) -> ParseResult<Sign, L, E> {
     use Sign::*;
     character('-')
         .or('+')
@@ -178,7 +178,7 @@ enum Base {
     Hexadecimal,
 }
 
-fn base<L: Span>(source: &str, location: L) -> ParseResult<Base, L> {
+fn base<L: Span, E>(source: &str, location: L) -> ParseResult<Base, L, E> {
     use Base::*;
     character('0')
         .and(
@@ -202,11 +202,11 @@ fn base<L: Span>(source: &str, location: L) -> ParseResult<Base, L> {
         .parse(source, location)
 }
 
-impl<L: Span> Parser<Digits, L> for Base {
-    fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, Digits, L> {
-        fn digit<'l, L: Span + 'l>(
+impl<L: Span, E> Parser<Digits, L, E> for Base {
+    fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, Digits, L, E> {
+        fn digit<'l, L: Span + 'l, E: 'l>(
             (base, digits): (Base, Digits),
-        ) -> impl Parser<(Base, Digits), L> + 'l {
+        ) -> impl Parser<(Base, Digits), L, E> + 'l {
             use Digits::*;
             base.digit()
                 .map(move |digit| {
@@ -239,11 +239,11 @@ impl<L: Span> Parser<Digits, L> for Base {
                 }))
         };
 
-        fn rec<L: Span>(
+        fn rec<L: Span, E>(
             (base, digits): (Base, Digits),
             source: &str,
             location: L,
-        ) -> ParseResult<(Base, Digits), L> {
+        ) -> ParseResult<(Base, Digits), L, E> {
             let continued = location.clone();
             let complete = ParseResult::success((base, digits), source, location);
             digit((base, digits))
@@ -272,7 +272,7 @@ impl Base {
         }
     }
 
-    fn digit<L: Span>(self) -> impl Parser<u64, L> {
+    fn digit<L: Span, E>(self) -> impl Parser<u64, L, E> {
         use Base::*;
         match self {
             Binary => Self::binary_digit,
@@ -282,7 +282,7 @@ impl Base {
         }
     }
 
-    fn binary_digit<L: Span>(source: &str, location: L) -> ParseResult<u64, L> {
+    fn binary_digit<L: Span, E>(source: &str, location: L) -> ParseResult<u64, L, E> {
         single_character
             .condition(|c| '0' <= *c && *c <= '1')
             .map(|c| (c as u8) - b'0')
@@ -290,7 +290,7 @@ impl Base {
             .parse(source, location)
     }
 
-    fn octal_digit<L: Span>(source: &str, location: L) -> ParseResult<u64, L> {
+    fn octal_digit<L: Span, E>(source: &str, location: L) -> ParseResult<u64, L, E> {
         single_character
             .condition(|c| '0' <= *c && *c <= '7')
             .map(|c| (c as u8) - b'0')
@@ -298,7 +298,7 @@ impl Base {
             .parse(source, location)
     }
 
-    fn decimal_digit<L: Span>(source: &str, location: L) -> ParseResult<u64, L> {
+    fn decimal_digit<L: Span, E>(source: &str, location: L) -> ParseResult<u64, L, E> {
         single_character
             .condition(|c| '0' <= *c && *c <= '9')
             .map(|c| (c as u8) - b'0')
@@ -306,7 +306,7 @@ impl Base {
             .parse(source, location)
     }
 
-    fn hexadecimal_digit<L: Span>(source: &str, location: L) -> ParseResult<u64, L> {
+    fn hexadecimal_digit<L: Span, E>(source: &str, location: L) -> ParseResult<u64, L, E> {
         single_character
             .condition(|c| Self::is_hexadecimal(*c))
             .map(Self::as_hexadecimal)
@@ -336,7 +336,7 @@ enum Digits {
 }
 
 impl Digits {
-    fn either<L: Span>(source: &str, location: L) -> ParseResult<Self, L> {
+    fn either<L: Span, E>(source: &str, location: L) -> ParseResult<Self, L, E> {
         ParseResult::success(Digits::Integer(0), source, location.clone()).or(ParseResult::success(
             Digits::Real(0f64, 2f64),
             source,
@@ -345,7 +345,7 @@ impl Digits {
     }
 }
 
-pub fn string_literal<L: Span>(source: &str, location: L) -> ParseResult<String, L> {
+pub fn string_literal<L: Span, E>(source: &str, location: L) -> ParseResult<String, L, E> {
     character('"')
         .skip(
             any_character
@@ -363,8 +363,8 @@ mod tests {
     use super::*;
     use crate::location::new_location;
 
-    fn sequence<L: Span>(source: &str, location: L) -> ParseResult<Vec<Token>, L> {
-        fn token_list<L: Span>(source: &str, location: L) -> ParseResult<Vec<Token>, L> {
+    fn sequence<L: Span, E>(source: &str, location: L) -> ParseResult<Vec<Token>, L, E> {
+        fn token_list<L: Span, E>(source: &str, location: L) -> ParseResult<Vec<Token>, L, E> {
             token.drop(space).parse(source, location).map(&List::single)
         }
 

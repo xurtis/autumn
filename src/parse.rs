@@ -1,34 +1,34 @@
 use crate::location::{Meta, Span};
 
-pub fn parse<'s, T, L, P>(parser: &P, source: &'s str, location: L) -> ParseResult<'s, T, L>
+pub fn parse<'s, T, L, E, P>(parser: &P, source: &'s str, location: L) -> ParseResult<'s, T, L, E>
 where
-    P: Parser<T, L>,
+    P: Parser<T, L, E>,
 {
     parser.parse(source, location)
 }
 
 /// A parser takes an input source and produces an array of potential tagged values and an array of
 /// errors.
-pub trait Parser<T, L> {
-    fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, T, L>;
+pub trait Parser<T, L, E = ()> {
+    fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, T, L, E>;
 }
 
-impl<T, L, F> Parser<T, L> for F
+impl<T, L, E, F> Parser<T, L, E> for F
 where
-    F: for<'s> Fn(&'s str, L) -> ParseResult<'s, T, L>,
+    F: for<'s> Fn(&'s str, L) -> ParseResult<'s, T, L, E>,
 {
-    fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, T, L> {
+    fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, T, L, E> {
         self(source, location)
     }
 }
 
 #[derive(Debug)]
-pub struct ParseResult<'s, T, L> {
+pub struct ParseResult<'s, T, L, E = ()> {
     parsed: Vec<(Meta<T, L>, &'s str, L)>,
-    errors: Vec<ParseError>,
+    errors: Vec<Meta<E, L>>,
 }
 
-impl<'s, T, L> ParseResult<'s, T, L> {
+impl<'s, T, L, E> ParseResult<'s, T, L, E> {
     pub fn none() -> Self {
         ParseResult {
             parsed: vec![],
@@ -36,10 +36,10 @@ impl<'s, T, L> ParseResult<'s, T, L> {
         }
     }
 
-    pub fn error(error: ParseError) -> Self {
+    pub fn error(error: E, location: L) -> Self {
         ParseResult {
             parsed: vec![],
-            errors: vec![error],
+            errors: vec![Meta::new(error, location)],
         }
     }
 
@@ -47,7 +47,7 @@ impl<'s, T, L> ParseResult<'s, T, L> {
         self.parsed.drain(..).map(|(v, _, _)| v)
     }
 
-    pub fn errors<'r>(&'r mut self) -> impl Iterator<Item = ParseError> + 'r {
+    pub fn errors<'r>(&'r mut self) -> impl Iterator<Item = Meta<E, L>> + 'r {
         self.errors.drain(..)
     }
 
@@ -73,7 +73,7 @@ impl<'s, T, L> ParseResult<'s, T, L> {
         ParseResult { parsed, errors }
     }
 
-    pub fn map<A, F>(self, map: &F) -> ParseResult<'s, A, L>
+    pub fn map<A, F>(self, map: &F) -> ParseResult<'s, A, L, E>
     where
         F: Fn(T) -> A,
     {
@@ -86,8 +86,8 @@ impl<'s, T, L> ParseResult<'s, T, L> {
     }
 }
 
-impl<'s, T, L: Clone> ParseResult<'s, T, L> {
-    pub fn meta(self) -> ParseResult<'s, Meta<T, L>, L> {
+impl<'s, T, L: Clone, E> ParseResult<'s, T, L, E> {
+    pub fn meta(self) -> ParseResult<'s, Meta<T, L>, L, E> {
         let ParseResult { parsed, errors } = self;
         let parsed = parsed
             .into_iter()
@@ -98,7 +98,7 @@ impl<'s, T, L: Clone> ParseResult<'s, T, L> {
     }
 }
 
-impl<'s, T, L: Span> ParseResult<'s, T, L> {
+impl<'s, T, L: Span, E> ParseResult<'s, T, L, E> {
     pub fn success(value: T, source: &'s str, mut location: L) -> Self {
         ParseResult {
             parsed: vec![(Meta::new(value, location.take()), source, location)],
@@ -106,9 +106,9 @@ impl<'s, T, L: Span> ParseResult<'s, T, L> {
         }
     }
 
-    pub fn and_then<A, F>(self, next: &F) -> ParseResult<'s, A, L>
+    pub fn and_then<A, F>(self, next: &F) -> ParseResult<'s, A, L, E>
     where
-        F: Fn(T, &'s str, L) -> ParseResult<'s, A, L>,
+        F: Fn(T, &'s str, L) -> ParseResult<'s, A, L, E>,
     {
         let ParseResult { parsed, mut errors } = self;
         let mut new_parsed = vec![];
@@ -131,7 +131,7 @@ impl<'s, T, L: Span> ParseResult<'s, T, L> {
     }
 }
 
-fn unfold<'s, T, L: Span>(meta: Meta<ParseResult<'s, T, L>, L>) -> ParseResult<'s, T, L> {
+fn unfold<'s, T, L: Span, E>(meta: Meta<ParseResult<'s, T, L, E>, L>) -> ParseResult<'s, T, L, E> {
     let (ParseResult { parsed, errors }, start) = meta.split();
 
     let parsed = parsed
@@ -143,13 +143,16 @@ fn unfold<'s, T, L: Span>(meta: Meta<ParseResult<'s, T, L>, L>) -> ParseResult<'
         })
         .collect();
 
-    ParseResult { parsed, errors }
-}
+    let errors = errors
+        .into_iter()
+        .map(|e| e.split())
+        .map(|(error, mut location)| {
+            location.move_start(start.start().clone());
+            Meta::new(error, location)
+        })
+        .collect();
 
-/// Error produced during parsing
-#[derive(Debug)]
-pub enum ParseError {
-    Generic,
+    ParseResult { parsed, errors }
 }
 
 pub trait List: Sized {

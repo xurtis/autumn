@@ -8,7 +8,7 @@ pub mod token;
 
 pub use combinators::{BoxedParserExt, ParserExt};
 pub use location::{new_location, path_location, Location, Meta, Span};
-pub use parse::{parse, List, ParseError, ParseResult, Parser};
+pub use parse::{parse, List, ParseResult, Parser};
 
 #[cfg(test)]
 mod tests {
