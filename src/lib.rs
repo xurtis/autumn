@@ -8,7 +8,7 @@ pub mod token;
 
 pub use combinators::{BoxedParserExt, ParserExt};
 pub use location::{new_location, path_location, Location, Meta, Span};
-pub use parse::{parse, List, Parse, ParseError, ParseResult, Parser};
+pub use parse::{parse, List, ParseError, ParseResult, Parser};
 
 #[cfg(test)]
 mod tests {
@@ -201,7 +201,7 @@ mod tests {
             let mut result = sexpression.end().parse(expression, new_location());
             assert!(result.is_success());
             for value in result.values() {
-                println!("{:#?}", **value);
+                println!("{:#?}", *value);
             }
         }
     }

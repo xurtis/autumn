@@ -242,11 +242,10 @@ impl<L: Span> Parser<Digits, L> for Base {
         fn rec<L: Span>(
             (base, digits): (Base, Digits),
             source: &str,
-            mut location: L,
+            location: L,
         ) -> ParseResult<(Base, Digits), L> {
             let continued = location.clone();
-            let parse = Parse::new((base, digits), location.take());
-            let complete = ParseResult::parsed(parse, source, location);
+            let complete = ParseResult::success((base, digits), source, location);
             digit((base, digits))
                 .or(character('_').map(|_| (base, digits)))
                 .parse(source, continued)
@@ -388,7 +387,7 @@ mod tests {
             assert!(result.is_success());
             assert!(result.single_parse());
             for value in result.values() {
-                println!("{:?}", value.into_inner().inner());
+                println!("{:?}", value.inner());
             }
         }
     }
@@ -420,8 +419,7 @@ mod tests {
             assert!(result.is_success());
             assert!(result.single_parse());
             for value in result.values() {
-                let tokens = value.into_inner().inner();
-                println!("{:?}", tokens);
+                println!("{:?}", value.inner());
             }
         }
     }

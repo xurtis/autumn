@@ -2,7 +2,7 @@
 
 use crate::location::Span;
 use crate::ParserExt;
-use crate::{List, Parse, ParseResult, Parser};
+use crate::{List, ParseResult, Parser};
 
 pub fn none<T, L>(_: &str, _: L) -> ParseResult<T, L> {
     ParseResult::none()
@@ -16,12 +16,8 @@ pub fn success<T, L: Span>(value: T, source: &str, location: L) -> ParseResult<T
     ParseResult::success(value, source, location)
 }
 
-pub fn empty<T, L>(source: &str, location: L) -> ParseResult<T, L>
-where
-    T: List,
-    L: Span,
-{
-    ParseResult::parsed(Parse::new(T::new(), location.clone()), source, location)
+pub fn empty<T: List, L: Span>(source: &str, location: L) -> ParseResult<T, L> {
+    ParseResult::success(T::new(), source, location)
 }
 
 pub fn closure<F, T, L>(function: F) -> impl Parser<T, L>
@@ -38,9 +34,7 @@ where
 {
     if let Some((_, next)) = source.char_indices().next() {
         location.after(next);
-        let char_location = location.take();
-        let parse = Parse::new(List::single(next), char_location);
-        ParseResult::parsed(parse, &source[next.len_utf8()..], location)
+        ParseResult::success(List::single(next), &source[next.len_utf8()..], location)
     } else {
         ParseResult::none()
     }
@@ -49,9 +43,7 @@ where
 pub fn single_character<L: Span>(source: &str, mut location: L) -> ParseResult<char, L> {
     if let Some((_, next)) = source.char_indices().next() {
         location.after(next);
-        let char_location = location.take();
-        let parse = Parse::new(next, char_location);
-        ParseResult::parsed(parse, &source[next.len_utf8()..], location)
+        ParseResult::success(next, &source[next.len_utf8()..], location)
     } else {
         ParseResult::none()
     }

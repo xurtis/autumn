@@ -1,7 +1,8 @@
 //! Cominators for combining parsers
 
 use crate::location::{Meta, Span};
-use crate::{parsers::empty, List, Parse, ParseResult, Parser};
+use crate::parse::{List, ParseResult, Parser};
+use crate::parsers::empty;
 use std::marker::PhantomData;
 
 /// Combinator extensions to parsers
@@ -69,19 +70,17 @@ pub struct Multiple<P>(P);
 
 impl<T: List + Clone, L: Span, P: Parser<T, L>> Parser<T, L> for Multiple<P> {
     fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, T, L> {
-        self.0.parse(source, location).and_either(
-            &|parsed, source, location| {
-                self.parse(source, location).map(&|mut result| {
-                    let mut parsed = parsed.clone();
-                    parsed.concat(&mut result);
-                    parsed
-                })
-            },
-            &|parsed, source, mut location| {
-                let parse = Parse::new(parsed, location.take());
-                ParseResult::parsed(parse, source, location)
-            },
-        )
+        self.0
+            .parse(source, location)
+            .and_then(&|parsed, source, location| {
+                self.parse(source, location.clone())
+                    .map(&|mut tail| {
+                        let mut parsed = parsed.clone();
+                        parsed.concat(&mut tail);
+                        parsed
+                    })
+                    .or(ParseResult::success(parsed, source, location))
+            })
     }
 }
 
@@ -89,7 +88,9 @@ pub struct Maybe<P>(P);
 
 impl<T: List + Clone, L: Span, P: Parser<T, L>> Parser<T, L> for Maybe<P> {
     fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, T, L> {
-        empty::<T, _>(source, location).then_either(&self.0, &empty)
+        self.0
+            .parse(source, location.clone())
+            .or(empty(source, location))
     }
 }
 
@@ -99,9 +100,9 @@ impl<T, L: Span, P: Parser<T, L>, F: Fn(&T) -> bool> Parser<T, L> for Condition<
     fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, T, L> {
         self.0
             .parse(source, location)
-            .and_then(&|parsed, source, mut location: L| {
+            .and_then(&|parsed, source, location: L| {
                 if self.1(&parsed) {
-                    ParseResult::parsed(Parse::new(parsed, location.take()), source, location)
+                    ParseResult::success(parsed, source, location)
                 } else {
                     ParseResult::none()
                 }
@@ -115,9 +116,9 @@ impl<T: Eq, L: Span, P: Parser<T, L>> Parser<T, L> for Matching<P, T> {
     fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, T, L> {
         self.0
             .parse(source, location)
-            .and_then(&|parsed, source, mut location: L| {
+            .and_then(&|parsed, source, location: L| {
                 if parsed == self.1 {
-                    ParseResult::parsed(Parse::new(parsed, location.take()), source, location)
+                    ParseResult::success(parsed, source, location)
                 } else {
                     ParseResult::none()
                 }
@@ -211,9 +212,7 @@ where
     fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, T, L> {
         self.0
             .parse(source, location)
-            .and_then(&|_, source, mut location| {
-                ParseResult::parsed(Parse::new(T::new(), location.take()), source, location)
-            })
+            .and_then(&|_, source, location| ParseResult::success(T::new(), source, location))
     }
 }
 

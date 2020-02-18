@@ -24,7 +24,7 @@ fn main() -> Result<()> {
 
         let mut result = expression.parse(&expr, new_location());
         for result in result.values() {
-            println!(" = {}", result.into_inner().inner());
+            println!(" = {}", result.inner());
         }
         for error in result.errors() {
             println!("Err: {:?}", error);

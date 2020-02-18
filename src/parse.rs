@@ -1,5 +1,4 @@
 use crate::location::{Meta, Span};
-use std::ops::Deref;
 
 pub fn parse<'s, T, L, P>(parser: &P, source: &'s str, location: L) -> ParseResult<'s, T, L>
 where
@@ -25,7 +24,7 @@ where
 
 #[derive(Debug)]
 pub struct ParseResult<'s, T, L> {
-    parsed: Vec<(Parse<T, L>, &'s str, L)>,
+    parsed: Vec<(Meta<T, L>, &'s str, L)>,
     errors: Vec<ParseError>,
 }
 
@@ -37,13 +36,6 @@ impl<'s, T, L> ParseResult<'s, T, L> {
         }
     }
 
-    pub fn parsed(value: Parse<T, L>, source: &'s str, location: L) -> Self {
-        ParseResult {
-            parsed: vec![(value, source, location)],
-            errors: vec![],
-        }
-    }
-
     pub fn error(error: ParseError) -> Self {
         ParseResult {
             parsed: vec![],
@@ -51,7 +43,7 @@ impl<'s, T, L> ParseResult<'s, T, L> {
         }
     }
 
-    pub fn values<'r>(&'r mut self) -> impl Iterator<Item = Parse<T, L>> + 'r {
+    pub fn values<'r>(&'r mut self) -> impl Iterator<Item = Meta<T, L>> + 'r {
         self.parsed.drain(..).map(|(v, _, _)| v)
     }
 
@@ -92,76 +84,28 @@ impl<'s, T, L> ParseResult<'s, T, L> {
             .collect();
         ParseResult { parsed, errors }
     }
-
-    pub fn then<V, F>(self, next: &F) -> ParseResult<'s, V, L>
-    where
-        F: Parser<V, L>,
-    {
-        let ParseResult { parsed, mut errors } = self;
-        let mut new_parsed = vec![];
-        let iter = parsed.into_iter().map(|(_, r, l)| next.parse(r, l));
-        for ParseResult {
-            mut parsed,
-            errors: mut new_errors,
-        } in iter
-        {
-            new_parsed.append(&mut parsed);
-            errors.append(&mut new_errors);
-        }
-        ParseResult {
-            parsed: new_parsed,
-            errors,
-        }
-    }
 }
 
 impl<'s, T, L: Clone> ParseResult<'s, T, L> {
-    pub fn success(value: T, source: &'s str, location: L) -> Self {
-        Self::parsed(Parse::new(value, location.clone()), source, location)
-    }
-
     pub fn meta(self) -> ParseResult<'s, Meta<T, L>, L> {
         let ParseResult { parsed, errors } = self;
         let parsed = parsed
             .into_iter()
-            .map(|(v, r, l)| (v.into_inner().split(), r, l))
-            .map(|((v, s), r, l)| (Parse::new(Meta::new(v, s.clone()), s), r, l))
+            .map(|(v, r, l)| (v.split(), r, l))
+            .map(|((v, s), r, l)| (Meta::new(Meta::new(v, s.clone()), s), r, l))
             .collect();
         ParseResult { parsed, errors }
     }
 }
 
-impl<'s, T: Clone, L: Clone> ParseResult<'s, T, L> {
-    pub fn then_either<A, B, V>(self, first: &A, second: &B) -> ParseResult<'s, V, L>
-    where
-        A: Parser<V, L>,
-        B: Parser<V, L>,
-    {
-        let ParseResult { parsed, mut errors } = self;
-        let first = parsed
-            .iter()
-            .map(|(_, r, l)| (r.clone(), l.clone()))
-            .map(|(r, l)| first.parse(r, l))
-            .collect::<Vec<_>>()
-            .into_iter();
-        let second = parsed.into_iter().map(|(_, r, l)| second.parse(r, l));
-        let mut new_parsed = vec![];
-        for ParseResult {
-            mut parsed,
-            errors: mut new_errors,
-        } in first.chain(second)
-        {
-            new_parsed.append(&mut parsed);
-            errors.append(&mut new_errors);
-        }
+impl<'s, T, L: Span> ParseResult<'s, T, L> {
+    pub fn success(value: T, source: &'s str, mut location: L) -> Self {
         ParseResult {
-            parsed: new_parsed,
-            errors,
+            parsed: vec![(Meta::new(value, location.take()), source, location)],
+            errors: vec![],
         }
     }
-}
 
-impl<'s, T, L: Span> ParseResult<'s, T, L> {
     pub fn and_then<A, F>(self, next: &F) -> ParseResult<'s, A, L>
     where
         F: Fn(T, &'s str, L) -> ParseResult<'s, A, L>,
@@ -171,7 +115,7 @@ impl<'s, T, L: Span> ParseResult<'s, T, L> {
         let iter = parsed
             .into_iter()
             .map(|(v, r, l)| v.map(|v| next(v, r, l.clone())))
-            .map(|v| v.unfold());
+            .map(unfold);
         for ParseResult {
             mut parsed,
             errors: mut new_errors,
@@ -187,82 +131,19 @@ impl<'s, T, L: Span> ParseResult<'s, T, L> {
     }
 }
 
-impl<'s, T: Clone, L: Span> ParseResult<'s, T, L> {
-    pub fn and_either<A, B, V>(self, first: &A, second: &B) -> ParseResult<'s, V, L>
-    where
-        A: Fn(T, &'s str, L) -> ParseResult<'s, V, L>,
-        B: Fn(T, &'s str, L) -> ParseResult<'s, V, L>,
-    {
-        let ParseResult { parsed, mut errors } = self;
-        let first = parsed
-            .iter()
-            .map(|(v, r, l)| (v.clone(), r.clone(), l.clone()))
-            .map(|(v, r, l)| v.map(|v| first(v, r, l.clone())))
-            .map(|v| v.unfold())
-            .collect::<Vec<_>>()
-            .into_iter();
-        let second = parsed
-            .into_iter()
-            .map(|(v, r, l)| v.map(|v| second(v, r, l.clone())))
-            .map(|v| v.unfold());
+fn unfold<'s, T, L: Span>(meta: Meta<ParseResult<'s, T, L>, L>) -> ParseResult<'s, T, L> {
+    let (ParseResult { parsed, errors }, start) = meta.split();
 
-        let mut new_parsed = vec![];
-        for ParseResult {
-            mut parsed,
-            errors: mut new_errors,
-        } in first.chain(second)
-        {
-            new_parsed.append(&mut parsed);
-            errors.append(&mut new_errors);
-        }
-        ParseResult {
-            parsed: new_parsed,
-            errors,
-        }
-    }
-}
+    let parsed = parsed
+        .into_iter()
+        .map(|(p, r, l)| (p.split(), r, l))
+        .map(|((value, mut location), r, l)| {
+            location.move_start(start.start().clone());
+            (Meta::new(value, location), r, l)
+        })
+        .collect();
 
-/// A single successful parse
-#[derive(Debug, Clone)]
-pub struct Parse<T, L>(Meta<T, L>);
-
-impl<T, L> Parse<T, L> {
-    pub fn new(value: T, location: L) -> Self {
-        Parse(Meta::new(value, location))
-    }
-
-    pub fn map<A>(self, map: impl FnMut(T) -> A) -> Parse<A, L> {
-        Parse(self.0.map(map))
-    }
-
-    pub fn into_inner(self) -> Meta<T, L> {
-        self.0
-    }
-}
-
-impl<'s, T, L: Span> Parse<ParseResult<'s, T, L>, L> {
-    pub fn unfold(self) -> ParseResult<'s, T, L> {
-        let (ParseResult { parsed, errors }, start) = self.into_inner().split();
-
-        let parsed = parsed
-            .into_iter()
-            .map(|(p, r, l)| (p.into_inner().split(), r, l))
-            .map(|((value, mut location), r, l)| {
-                location.move_start(start.start().clone());
-                (Parse::new(value, location), r, l)
-            })
-            .collect();
-
-        ParseResult { parsed, errors }
-    }
-}
-
-impl<T, L> Deref for Parse<T, L> {
-    type Target = Meta<T, L>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
+    ParseResult { parsed, errors }
 }
 
 /// Error produced during parsing
