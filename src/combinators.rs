@@ -75,8 +75,8 @@ impl<T: List + Clone, L: Span, E, P: Parser<T, L, E>> Parser<T, L, E> for Multip
     fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, T, L, E> {
         self.0
             .parse(source, location)
-            .and_then(&|parsed, source, location| {
-                self.parse(source, location.clone())
+            .and_then(&|parsed, source, mut location| {
+                self.parse(source, location.take())
                     .map(&|mut tail| {
                         let mut parsed = parsed.clone();
                         parsed.concat(&mut tail);
@@ -107,7 +107,7 @@ impl<T, L: Span, E, P: Parser<T, L, E>, F: Fn(&T) -> bool> Parser<T, L, E> for C
                 if self.1(&parsed) {
                     ParseResult::success(parsed, source, location)
                 } else {
-                    ParseResult::none()
+                    ParseResult::none(location)
                 }
             })
     }
@@ -123,7 +123,7 @@ impl<T: PartialEq<V>, V, E, L: Span, P: Parser<T, L, E>> Parser<T, L, E> for Mat
                 if parsed == self.1 {
                     ParseResult::success(parsed, source, location)
                 } else {
-                    ParseResult::none()
+                    ParseResult::none(location)
                 }
             })
     }
@@ -245,7 +245,7 @@ impl<T, L: Span, E, P: Parser<T, L, E>> Parser<T, L, E> for End<P> {
                 if source.len() == 0 {
                     ParseResult::success(value, source, location)
                 } else {
-                    ParseResult::none()
+                    ParseResult::none(location)
                 }
             })
     }

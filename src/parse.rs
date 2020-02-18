@@ -24,22 +24,17 @@ where
 
 #[derive(Debug)]
 pub struct ParseResult<'s, T, L, E = ()> {
+    start: L,
     parsed: Vec<(Meta<T, L>, &'s str, L)>,
     errors: Vec<Meta<E, L>>,
 }
 
 impl<'s, T, L, E> ParseResult<'s, T, L, E> {
-    pub fn none() -> Self {
+    pub fn none(location: L) -> Self {
         ParseResult {
+            start: location,
             parsed: vec![],
             errors: vec![],
-        }
-    }
-
-    pub fn error(error: E, location: L) -> Self {
-        ParseResult {
-            parsed: vec![],
-            errors: vec![Meta::new(error, location)],
         }
     }
 
@@ -61,46 +56,57 @@ impl<'s, T, L, E> ParseResult<'s, T, L, E> {
 
     pub fn or(self, other: Self) -> Self {
         let ParseResult {
+            start,
             mut parsed,
             mut errors,
         } = self;
         let ParseResult {
             parsed: mut other_parsed,
             errors: mut other_errors,
+            ..
         } = other;
         parsed.append(&mut other_parsed);
         errors.append(&mut other_errors);
-        ParseResult { parsed, errors }
+        ParseResult { start, parsed, errors }
     }
 
     pub fn map<A, F>(self, map: &F) -> ParseResult<'s, A, L, E>
     where
         F: Fn(T) -> A,
     {
-        let ParseResult { parsed, errors } = self;
+        let ParseResult { start, parsed, errors } = self;
         let parsed = parsed
             .into_iter()
             .map(|(v, r, l)| (v.map(map), r, l))
             .collect();
-        ParseResult { parsed, errors }
+        ParseResult { start, parsed, errors }
     }
 }
 
 impl<'s, T, L: Clone, E> ParseResult<'s, T, L, E> {
     pub fn meta(self) -> ParseResult<'s, Meta<T, L>, L, E> {
-        let ParseResult { parsed, errors } = self;
+        let ParseResult { start, parsed, errors } = self;
         let parsed = parsed
             .into_iter()
             .map(|(v, r, l)| (v.split(), r, l))
             .map(|((v, s), r, l)| (Meta::new(Meta::new(v, s.clone()), s), r, l))
             .collect();
-        ParseResult { parsed, errors }
+        ParseResult { start, parsed, errors }
     }
 }
 
 impl<'s, T, L: Span, E> ParseResult<'s, T, L, E> {
+    pub fn error(error: E, location: L) -> Self {
+        ParseResult {
+            start: location.clone(),
+            parsed: vec![],
+            errors: vec![Meta::new(error, location)],
+        }
+    }
+
     pub fn success(value: T, source: &'s str, mut location: L) -> Self {
         ParseResult {
+            start: location.clone(),
             parsed: vec![(Meta::new(value, location.take()), source, location)],
             errors: vec![],
         }
@@ -110,7 +116,7 @@ impl<'s, T, L: Span, E> ParseResult<'s, T, L, E> {
     where
         F: Fn(T, &'s str, L) -> ParseResult<'s, A, L, E>,
     {
-        let ParseResult { parsed, mut errors } = self;
+        let ParseResult { start, parsed, mut errors } = self;
         let mut new_parsed = vec![];
         let iter = parsed
             .into_iter()
@@ -119,20 +125,37 @@ impl<'s, T, L: Span, E> ParseResult<'s, T, L, E> {
         for ParseResult {
             mut parsed,
             errors: mut new_errors,
+            ..
         } in iter
         {
             new_parsed.append(&mut parsed);
             errors.append(&mut new_errors);
         }
         ParseResult {
+            start,
             parsed: new_parsed,
             errors,
         }
     }
+
+    pub fn expand_error(self) -> ParseResult<'s, T, L, E> {
+        let ParseResult { start, parsed, errors } = self;
+        let errors = errors
+            .into_iter()
+            .map(|e| e.split())
+            .map(|(error, mut location)| {
+                if location.characters() == 0 {
+                    location.move_start(start.start().clone());
+                }
+                Meta::new(error, location)
+            })
+            .collect();
+        ParseResult { start, parsed, errors }
+    }
 }
 
 fn unfold<'s, T, L: Span, E>(meta: Meta<ParseResult<'s, T, L, E>, L>) -> ParseResult<'s, T, L, E> {
-    let (ParseResult { parsed, errors }, start) = meta.split();
+    let (ParseResult { parsed, errors, .. }, start) = meta.split();
 
     let parsed = parsed
         .into_iter()
@@ -143,16 +166,7 @@ fn unfold<'s, T, L: Span, E>(meta: Meta<ParseResult<'s, T, L, E>, L>) -> ParseRe
         })
         .collect();
 
-    let errors = errors
-        .into_iter()
-        .map(|e| e.split())
-        .map(|(error, mut location)| {
-            location.move_start(start.start().clone());
-            Meta::new(error, location)
-        })
-        .collect();
-
-    ParseResult { parsed, errors }
+    ParseResult { start, parsed, errors }
 }
 
 pub trait List: Sized {

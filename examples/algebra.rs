@@ -101,6 +101,7 @@ fn div<L: Span>(source: &str, location: L) -> ParseResult<i32, L, EvalError> {
                 })
                 .or(success(left, source, location))
         })
+        .expand_error()
 }
 
 fn rem<L: Span>(source: &str, location: L) -> ParseResult<i32, L, EvalError> {
@@ -119,6 +120,7 @@ fn rem<L: Span>(source: &str, location: L) -> ParseResult<i32, L, EvalError> {
                 })
                 .or(success(left, source, location))
         })
+        .expand_error()
 }
 
 fn paren<L: Span>(source: &str, location: L) -> ParseResult<i32, L, EvalError> {

@@ -144,7 +144,7 @@ fn number_suffix<L: Span, E>(number: SignedNumber) -> impl Parser<Number, L, E> 
                     (Real(value, _), "r") => success(Real64(value), source, location),
                     (Real(value, _), "r32") => success(Real32(value as f32), source, location),
                     (Real(value, _), "r64") => success(Real64(value), source, location),
-                    _ => ParseResult::none(),
+                    _ => ParseResult::none(location),
                 }
             })
     })

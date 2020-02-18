@@ -4,8 +4,8 @@ use crate::location::Span;
 use crate::ParserExt;
 use crate::{List, ParseResult, Parser};
 
-pub fn none<T, L, E>(_: &str, _: L) -> ParseResult<T, L, E> {
-    ParseResult::none()
+pub fn none<T, L, E>(_: &str, location: L) -> ParseResult<T, L, E> {
+    ParseResult::none(location)
 }
 
 pub fn value<T: Clone, L: Span, E>(value: T) -> impl Parser<T, L, E> {
@@ -40,7 +40,7 @@ where
         location.after(next);
         ParseResult::success(List::single(next), &source[next.len_utf8()..], location)
     } else {
-        ParseResult::none()
+        ParseResult::none(location)
     }
 }
 
@@ -49,7 +49,7 @@ pub fn single_character<L: Span, E>(source: &str, mut location: L) -> ParseResul
         location.after(next);
         ParseResult::success(next, &source[next.len_utf8()..], location)
     } else {
-        ParseResult::none()
+        ParseResult::none(location)
     }
 }
 

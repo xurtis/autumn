@@ -72,6 +72,11 @@ pub trait Span: Sized + Clone + fmt::Debug {
     /// Get a mutable reference to the end
     fn end_mut(&mut self) -> &mut Self::Location;
 
+    /// Get the number of characters between the start and the end
+    fn characters(&self) -> usize {
+        self.end().character() - self.start().character()
+    }
+
     /// Move the start position of a span
     fn move_start(&mut self, new_start: Self::Location) {
         *self.start_mut() = new_start;
