@@ -367,17 +367,14 @@ mod tests {
 
     fn sequence<L: Span>(source: &str, location: L) -> ParseResult<Vec<Token>, L> {
         fn token_list<L: Span>(source: &str, location: L) -> ParseResult<Vec<Token>, L> {
-            token
-                .drop(space.or(tail))
-                .parse(source, location)
-                .map(&List::single)
+            token.drop(space).parse(source, location).map(&List::single)
         }
+
         space
             .maybe()
-            .skip::<String>()
-            .and(token_list.multiple().maybe())
-            .drop::<String, _>(space.maybe())
-            .and(tail)
+            .and_then(|_| token_list.multiple().maybe().and(token.map(&List::single)))
+            .drop(space.maybe())
+            .end()
             .parse(source, location)
     }
 
@@ -387,9 +384,7 @@ mod tests {
     fn identifiers() {
         for identifier_token in IDENTIFIERS {
             println!("\n{:?}", identifier_token);
-            let mut result = identifier
-                .drop::<String, _>(tail)
-                .parse(identifier_token, new_location());
+            let mut result = identifier.end().parse(identifier_token, new_location());
             assert!(result.is_success());
             assert!(result.single_parse());
             for value in result.values() {

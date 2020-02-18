@@ -45,6 +45,10 @@ pub trait ParserExt<T, L>: Parser<T, L> + Sized {
     fn condition<F: Fn(&T) -> bool>(self, condition: F) -> Condition<Self, F> {
         Condition(self, condition)
     }
+
+    fn end(self) -> End<Self> {
+        End(self)
+    }
 }
 
 impl<T, L, P: Parser<T, L>> ParserExt<T, L> for P {}
@@ -221,5 +225,21 @@ impl<'p, T, L> Boxed<dyn Parser<T, L> + 'p> {
 impl<'p, T, L> Parser<T, L> for Boxed<dyn Parser<T, L> + 'p> {
     fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, T, L> {
         self.0.parse(source, location)
+    }
+}
+
+pub struct End<P>(P);
+
+impl<T, L: Span, P: Parser<T, L>> Parser<T, L> for End<P> {
+    fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, T, L> {
+        self.0
+            .parse(source, location)
+            .and_then(&|value, source, location| {
+                if source.len() == 0 {
+                    ParseResult::success(value, source, location)
+                } else {
+                    ParseResult::none()
+                }
+            })
     }
 }

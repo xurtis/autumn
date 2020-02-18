@@ -24,18 +24,6 @@ where
     ParseResult::parsed(Parse::new(T::new(), location.clone()), source, location)
 }
 
-pub fn tail<T, L>(source: &str, location: L) -> ParseResult<T, L>
-where
-    T: List,
-    L: Span,
-{
-    if source.len() == 0 {
-        ParseResult::parsed(Parse::new(T::new(), location.clone()), source, location)
-    } else {
-        ParseResult::none()
-    }
-}
-
 pub fn closure<F, T, L>(function: F) -> impl Parser<T, L>
 where
     F: for<'s> Fn(&'s str, L) -> ParseResult<'s, T, L>,

@@ -46,7 +46,7 @@ mod tests {
     fn simple_tokens() {
         for valid_token in VALID_TOKENS {
             println!("\n{:#?}", valid_token);
-            let mut result = token.and(tail).parse(valid_token, new_location());
+            let mut result = token.end().parse(valid_token, new_location());
             assert!(result.is_success());
             for value in result.values() {
                 println!("{:?}", *value);
@@ -66,7 +66,7 @@ mod tests {
             .and(space.skip::<String>().and(token_list).multiple().maybe())
             .maybe()
             .drop(space.maybe())
-            .drop::<String, _>(tail)
+            .end()
             .parse(source, location)
     }
 
@@ -195,9 +195,7 @@ mod tests {
         println!();
         for expression in S_EXPRESSIONS {
             println!("\n{:#?}", expression);
-            let mut result = sexpression
-                .drop::<String, _>(tail)
-                .parse(expression, new_location());
+            let mut result = sexpression.end().parse(expression, new_location());
             assert!(result.is_success());
             for value in result.values() {
                 println!("{:#?}", **value);
