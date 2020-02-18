@@ -51,11 +51,11 @@ impl<'s, T, L> ParseResult<'s, T, L> {
         }
     }
 
-    pub fn values(&'s mut self) -> impl Iterator<Item = Parse<T, L>> + 's {
+    pub fn values<'r>(&'r mut self) -> impl Iterator<Item = Parse<T, L>> + 'r {
         self.parsed.drain(..).map(|(v, _, _)| v)
     }
 
-    pub fn errors(&'s mut self) -> impl Iterator<Item = ParseError> + 's {
+    pub fn errors<'r>(&'r mut self) -> impl Iterator<Item = ParseError> + 'r {
         self.errors.drain(..)
     }
 
