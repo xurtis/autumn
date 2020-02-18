@@ -39,7 +39,10 @@ pub trait ParserExt<T, L>: Parser<T, L> + Sized {
         Skip(self, keep, PhantomData)
     }
 
-    fn matching(self, compare: T) -> Matching<Self, T> {
+    fn matching<V>(self, compare: V) -> Matching<Self, V>
+    where
+        T: PartialEq<V>,
+    {
         Matching(self, compare)
     }
 
@@ -112,7 +115,7 @@ impl<T, L: Span, P: Parser<T, L>, F: Fn(&T) -> bool> Parser<T, L> for Condition<
 
 pub struct Matching<P, F>(P, F);
 
-impl<T: Eq, L: Span, P: Parser<T, L>> Parser<T, L> for Matching<P, T> {
+impl<T: PartialEq<V>, V, L: Span, P: Parser<T, L>> Parser<T, L> for Matching<P, V> {
     fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, T, L> {
         self.0
             .parse(source, location)
