@@ -27,7 +27,7 @@ pub struct ParseResult<'s, T, L, E = ()> {
     start: L,
     parsed: Vec<(Meta<T, L>, &'s str, L)>,
     errors: Vec<Meta<E, L>>,
-    exceptions: Vec<Meta<E, L>>,
+    exception: Option<Meta<E, L>>,
 }
 
 impl<'s, T, L, E> ParseResult<'s, T, L, E> {
@@ -36,7 +36,7 @@ impl<'s, T, L, E> ParseResult<'s, T, L, E> {
             start: location,
             parsed: vec![],
             errors: vec![],
-            exceptions: vec![],
+            exception: None,
         }
     }
 
@@ -48,12 +48,12 @@ impl<'s, T, L, E> ParseResult<'s, T, L, E> {
         self.errors.drain(..)
     }
 
-    pub fn uncaught_exceptions<'r>(&'r mut self) -> impl Iterator<Item = Meta<E, L>> + 'r {
-        self.exceptions.drain(..)
+    pub fn uncaught_exception(&mut self) -> Option<Meta<E, L>> {
+        self.exception.take()
     }
 
     pub fn is_success(&self) -> bool {
-        self.errors.len() == 0 && self.parsed.len() > 0
+        self.errors.len() == 0 && self.exception.is_none() && self.parsed.len() > 0
     }
 
     pub fn single_parse(&self) -> bool {
@@ -65,22 +65,22 @@ impl<'s, T, L, E> ParseResult<'s, T, L, E> {
             start,
             mut parsed,
             mut errors,
-            mut exceptions,
+            exception,
         } = self;
         let ParseResult {
             parsed: mut other_parsed,
             errors: mut other_errors,
-            exceptions: mut other_exceptions,
+            exception: other_exception,
             ..
         } = other;
         parsed.append(&mut other_parsed);
         errors.append(&mut other_errors);
-        exceptions.append(&mut other_exceptions);
+        let exception = exception.or(other_exception);
         ParseResult {
             start,
             parsed,
             errors,
-            exceptions,
+            exception,
         }
     }
 
@@ -92,7 +92,7 @@ impl<'s, T, L, E> ParseResult<'s, T, L, E> {
             start,
             parsed,
             errors,
-            exceptions,
+            exception,
         } = self;
         let parsed = parsed
             .into_iter()
@@ -102,7 +102,7 @@ impl<'s, T, L, E> ParseResult<'s, T, L, E> {
             start,
             parsed,
             errors,
-            exceptions,
+            exception,
         }
     }
 }
@@ -113,7 +113,7 @@ impl<'s, T, L: Clone, E> ParseResult<'s, T, L, E> {
             start,
             parsed,
             errors,
-            exceptions,
+            exception,
         } = self;
         let parsed = parsed
             .into_iter()
@@ -124,7 +124,7 @@ impl<'s, T, L: Clone, E> ParseResult<'s, T, L, E> {
             start,
             parsed,
             errors,
-            exceptions,
+            exception,
         }
     }
 }
@@ -135,7 +135,7 @@ impl<'s, T, L: Span, E> ParseResult<'s, T, L, E> {
             start: location.clone(),
             parsed: vec![],
             errors: vec![Meta::new(error, location)],
-            exceptions: vec![],
+            exception: None,
         }
     }
 
@@ -144,7 +144,7 @@ impl<'s, T, L: Span, E> ParseResult<'s, T, L, E> {
             start: location.clone(),
             parsed: vec![],
             errors: vec![],
-            exceptions: vec![Meta::new(error, location)],
+            exception: Some(Meta::new(error, location)),
         }
     }
 
@@ -153,7 +153,7 @@ impl<'s, T, L: Span, E> ParseResult<'s, T, L, E> {
             start: location.clone(),
             parsed: vec![(Meta::new(value, location.take()), source, location)],
             errors: vec![],
-            exceptions: vec![],
+            exception: None,
         }
     }
 
@@ -165,7 +165,7 @@ impl<'s, T, L: Span, E> ParseResult<'s, T, L, E> {
             start,
             parsed,
             mut errors,
-            mut exceptions,
+            mut exception,
         } = self;
         let mut new_parsed = vec![];
         let iter = parsed
@@ -175,19 +175,19 @@ impl<'s, T, L: Span, E> ParseResult<'s, T, L, E> {
         for ParseResult {
             mut parsed,
             errors: mut new_errors,
-            exceptions: mut new_exceptions,
+            exception: new_exception,
             ..
         } in iter
         {
             new_parsed.append(&mut parsed);
             errors.append(&mut new_errors);
-            exceptions.append(&mut new_exceptions);
+            exception = exception.or(new_exception);
         }
         ParseResult {
             start,
             parsed: new_parsed,
             errors,
-            exceptions,
+            exception,
         }
     }
 
@@ -196,9 +196,9 @@ impl<'s, T, L: Span, E> ParseResult<'s, T, L, E> {
             start,
             parsed,
             mut errors,
-            exceptions,
+            exception,
         } = self;
-        let exceptions = exceptions
+        let exceptions = exception
             .into_iter()
             .map(|e| e.split())
             .map(|(error, mut location)| {
@@ -212,7 +212,7 @@ impl<'s, T, L: Span, E> ParseResult<'s, T, L, E> {
             start,
             parsed,
             errors,
-            exceptions: vec![],
+            exception: None,
         }
     }
 }
@@ -222,7 +222,7 @@ fn unfold<'s, T, L: Span, E>(meta: Meta<ParseResult<'s, T, L, E>, L>) -> ParseRe
         ParseResult {
             parsed,
             errors,
-            exceptions,
+            exception,
             ..
         },
         start,
@@ -241,7 +241,7 @@ fn unfold<'s, T, L: Span, E>(meta: Meta<ParseResult<'s, T, L, E>, L>) -> ParseRe
         start,
         parsed,
         errors,
-        exceptions,
+        exception,
     }
 }
 
