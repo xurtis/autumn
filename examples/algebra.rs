@@ -24,21 +24,26 @@ fn main() -> Result<()> {
         }
 
         let mut result = expression.parse(&expr, new_location());
-        for result in result.values() {
-            println!(" = {}", result.inner());
-        }
-        for error in result.errors() {
-            println!("Err: {}", error);
+        if result.is_success() {
+            for result in result.values() {
+                println!(" = {}", result.inner());
+            }
+        } else {
+            for error in result.errors() {
+                println!("Err: {}", error);
+            }
         }
     }
 
     Ok(())
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 enum EvalError {
     DivisionByZero(i32, i32),
     ModuloZero(i32, i32),
+    InvalidExpression(String),
+    InvalidLiteral(String),
 }
 use EvalError::*;
 
@@ -47,6 +52,8 @@ impl fmt::Display for EvalError {
         match self {
             DivisionByZero(n, d) => write!(f, "Division by zero ({} / {})", n, d),
             ModuloZero(n, d) => write!(f, "Remainder of division by zero ({} % {})", n, d),
+            InvalidExpression(expr) => write!(f, "Invalid expression: {}", expr),
+            InvalidLiteral(expr) => write!(f, "Invalid literal: {}", expr),
         }
     }
 }
@@ -56,6 +63,14 @@ fn expression<L: Span>(source: &str, location: L) -> ParseResult<i32, L, EvalErr
         .maybe()
         .skip(add.drop(space.maybe()))
         .end()
+        .on_failure(
+            any_character
+                .multiple()
+                .drop(space)
+                .end()
+                .and_then(|text| throw(InvalidExpression(text)))
+                .catch(),
+        )
         .parse(source, location)
 }
 
@@ -135,6 +150,14 @@ fn literal<L: Span>(source: &str, location: L) -> ParseResult<i32, L, EvalError>
         .maybe()
         .and(digit.multiple())
         .map(|number| number.parse().unwrap())
+        .on_failure(
+            single_character
+                .condition(|c| !c.is_whitespace())
+                .map(List::single)
+                .multiple()
+                .and_then(|text| value(0).or(throw(InvalidLiteral(text))))
+                .catch(),
+        )
         .parse(source, location)
 }
 
