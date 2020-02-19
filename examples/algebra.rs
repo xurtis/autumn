@@ -87,40 +87,38 @@ fn mul<L: Span>(source: &str, location: L) -> ParseResult<i32, L, EvalError> {
 }
 
 fn div<L: Span>(source: &str, location: L) -> ParseResult<i32, L, EvalError> {
-    rem.parse(source, location)
-        .and_then(&|left, source, location| {
-            operator("/")
-                .skip(div.map(move |right| (left, right)))
-                .parse(source, location.clone())
-                .and_then(&|(left, right), source, location| {
-                    if right != 0 {
-                        success(left / right, source, location)
-                    } else {
-                        failure(DivisionByZero(left, right), location)
-                    }
-                })
-                .or(success(left, source, location))
-        })
-        .expand_error()
+    rem.and_then(&|left| {
+        operator("/")
+            .skip(div.map(move |right| (left, right)))
+            .and_then(&|(left, right)| {
+                if right != 0 {
+                    value(left / right).boxed()
+                } else {
+                    throw(DivisionByZero(left, right)).boxed()
+                }
+            })
+            .or(value(left))
+    })
+    .catch()
+    .parse(source, location)
 }
 
 fn rem<L: Span>(source: &str, location: L) -> ParseResult<i32, L, EvalError> {
     paren
-        .parse(source, location)
-        .and_then(&|left, source, location| {
+        .and_then(&|left| {
             operator("%")
                 .skip(rem.map(move |right| (left, right)))
-                .parse(source, location.clone())
-                .and_then(&|(left, right), source, location| {
+                .and_then(&|(left, right)| {
                     if right != 0 {
-                        success(left % right, source, location)
+                        value(left % right).boxed()
                     } else {
-                        failure(ModuloZero(left, right), location)
+                        throw(ModuloZero(left, right)).boxed()
                     }
                 })
-                .or(success(left, source, location))
+                .or(value(left))
         })
-        .expand_error()
+        .catch()
+        .parse(source, location)
 }
 
 fn paren<L: Span>(source: &str, location: L) -> ParseResult<i32, L, EvalError> {

@@ -12,12 +12,20 @@ pub fn value<T: Clone, L: Span, E>(value: T) -> impl Parser<T, L, E> {
     closure(move |source, location| success(value.clone(), source, location))
 }
 
+pub fn throw<T: Clone, L: Span, E: Clone>(error: E) -> impl Parser<T, L, E> {
+    closure(move |_, location| exception(error.clone(), location))
+}
+
 pub fn success<T, L: Span, E>(value: T, source: &str, location: L) -> ParseResult<T, L, E> {
     ParseResult::success(value, source, location)
 }
 
 pub fn failure<'s, T, L: Span, E>(error: E, location: L) -> ParseResult<'s, T, L, E> {
     ParseResult::error(error, location)
+}
+
+pub fn exception<'s, T, L: Span, E>(error: E, location: L) -> ParseResult<'s, T, L, E> {
+    ParseResult::exception(error, location)
 }
 
 pub fn empty<T: List, L: Span, E>(source: &str, location: L) -> ParseResult<T, L, E> {
