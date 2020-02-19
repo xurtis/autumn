@@ -12,6 +12,10 @@ pub fn value<T: Clone, L: Span, E>(value: T) -> impl Parser<T, L, E> {
     closure(move |source, location| success(value.clone(), source, location))
 }
 
+pub fn error<T: Clone, L: Span, E: Clone>(error: E) -> impl Parser<T, L, E> {
+    closure(move |_, location| failure(error.clone(), location))
+}
+
 pub fn throw<T: Clone, L: Span, E: Clone>(error: E) -> impl Parser<T, L, E> {
     closure(move |_, location| exception(error.clone(), location))
 }
