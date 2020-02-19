@@ -31,6 +31,10 @@ pub trait ParserExt<T, L, E>: Parser<T, L, E> + Sized {
         AndThen(self, map, PhantomData)
     }
 
+    fn on_failure<P: Parser<T, L, E>>(self, other: P) -> OnFailure<Self, P> {
+        OnFailure(self, other)
+    }
+
     fn drop<V, P: Parser<V, L, E>>(self, other: P) -> Drop<Self, P, V> {
         Drop(self, other, PhantomData)
     }
@@ -191,6 +195,23 @@ where
         self.0
             .parse(source, location)
             .and_then(&|value, source, location| (self.1)(value).parse(source, location))
+    }
+}
+
+pub struct OnFailure<A, B>(A, B);
+
+impl<A, B, T: Clone, L: Span, E> Parser<T, L, E> for OnFailure<A, B>
+where
+    A: Parser<T, L, E>,
+    B: Parser<T, L, E>,
+{
+    fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, T, L, E> {
+        let parse = self.0.parse(source, location.clone());
+        if parse.is_success() {
+            parse
+        } else {
+            parse.or(self.1.parse(source, location))
+        }
     }
 }
 
