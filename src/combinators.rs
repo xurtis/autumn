@@ -35,6 +35,10 @@ pub trait ParserExt<T, L, E>: Parser<T, L, E> + Sized {
         OnFailure(self, other)
     }
 
+    fn on_none<P: Parser<T, L, E>>(self, other: P) -> OnNone<Self, P> {
+        OnNone(self, other)
+    }
+
     fn drop<V, P: Parser<V, L, E>>(self, other: P) -> Drop<Self, P, V> {
         Drop(self, other, PhantomData)
     }
@@ -211,6 +215,23 @@ where
             parse
         } else {
             parse.or(self.1.parse(source, location))
+        }
+    }
+}
+
+pub struct OnNone<A, B>(A, B);
+
+impl<A, B, T: Clone, L: Span, E> Parser<T, L, E> for OnNone<A, B>
+where
+    A: Parser<T, L, E>,
+    B: Parser<T, L, E>,
+{
+    fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, T, L, E> {
+        let parse = self.0.parse(source, location.clone());
+        if parse.is_none() {
+            parse.or(self.1.parse(source, location))
+        } else {
+            parse
         }
     }
 }

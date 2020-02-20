@@ -109,7 +109,7 @@ fn div<L: Span>(source: &str, location: L) -> ParseResult<i32, L, EvalError> {
                 if right != 0 {
                     value(left / right).boxed()
                 } else {
-                    throw(DivisionByZero(left, right)).boxed()
+                    value(1).or(throw(DivisionByZero(left, right))).boxed()
                 }
             })
             .or(value(left))
@@ -127,7 +127,7 @@ fn rem<L: Span>(source: &str, location: L) -> ParseResult<i32, L, EvalError> {
                     if right != 0 {
                         value(left % right).boxed()
                     } else {
-                        throw(ModuloZero(left, right)).boxed()
+                        value(1).or(throw(ModuloZero(left, right))).boxed()
                     }
                 })
                 .or(value(left))
@@ -142,6 +142,14 @@ fn paren<L: Span>(source: &str, location: L) -> ParseResult<i32, L, EvalError> {
         .and_then(|_| add)
         .drop(space.maybe().and(character(')')))
         .or(literal)
+        .on_none(
+            single_character
+                .condition(|c| !c.is_whitespace())
+                .map(List::single)
+                .multiple()
+                .and_then(|text| value(1).or(throw(InvalidLiteral(text))))
+                .catch(),
+        )
         .parse(source, location)
 }
 
@@ -150,14 +158,6 @@ fn literal<L: Span>(source: &str, location: L) -> ParseResult<i32, L, EvalError>
         .maybe()
         .and(digit.multiple())
         .map(|number| number.parse().unwrap())
-        .on_failure(
-            single_character
-                .condition(|c| !c.is_whitespace())
-                .map(List::single)
-                .multiple()
-                .and_then(|text| value(0).or(throw(InvalidLiteral(text))))
-                .catch(),
-        )
         .parse(source, location)
 }
 

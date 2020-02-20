@@ -56,6 +56,10 @@ impl<'s, T, L, E> ParseResult<'s, T, L, E> {
         self.errors.len() == 0 && self.exception.is_none() && self.parsed.len() > 0
     }
 
+    pub fn is_none(&self) -> bool {
+        self.errors.len() == 0 && self.exception.is_none() && self.parsed.len() == 0
+    }
+
     pub fn single_parse(&self) -> bool {
         self.parsed.len() == 1
     }
