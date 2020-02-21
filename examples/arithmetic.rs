@@ -62,7 +62,7 @@ fn expression<L: Span>(source: &str, location: L) -> ParseResult<i32, L, EvalErr
         .maybe()
         .skip(add.drop(space.maybe()))
         .end()
-        .on_failure(
+        .on_none(
             any_character
                 .multiple()
                 .drop(space)
