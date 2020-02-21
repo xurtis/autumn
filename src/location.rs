@@ -279,6 +279,10 @@ impl<T, I> Meta<T, I> {
         self.inner
     }
 
+    pub fn inner_ref(&self) -> &T {
+        &self.inner
+    }
+
     pub fn split(self) -> (T, I) {
         (self.inner, self.location)
     }

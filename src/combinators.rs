@@ -65,10 +65,6 @@ pub trait ParserExt<T, L, E>: Parser<T, L, E> + Sized {
     fn meta(self) -> MetaMap<Self> {
         MetaMap(self)
     }
-
-    fn catch(self) -> Catch<Self> {
-        Catch(self)
-    }
 }
 
 impl<T, L, E, P: Parser<T, L, E>> ParserExt<T, L, E> for P {}
@@ -83,7 +79,7 @@ impl<'p, T: 'p, L: 'p, E: 'p, P: Parser<T, L, E> + 'p> BoxedParserExt<'p, T, L, 
 
 pub struct Multiple<P>(P);
 
-impl<T: List + Clone, L: Span, E, P: Parser<T, L, E>> Parser<T, L, E> for Multiple<P> {
+impl<T: List + Clone, L: Span, E: Clone, P: Parser<T, L, E>> Parser<T, L, E> for Multiple<P> {
     fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, T, L, E> {
         self.0
             .parse(source, location)
@@ -111,7 +107,9 @@ impl<T: List + Clone, L: Span, E, P: Parser<T, L, E>> Parser<T, L, E> for Maybe<
 
 pub struct Condition<P, F>(P, F);
 
-impl<T, L: Span, E, P: Parser<T, L, E>, F: Fn(&T) -> bool> Parser<T, L, E> for Condition<P, F> {
+impl<T, L: Span, E: Clone, P: Parser<T, L, E>, F: Fn(&T) -> bool> Parser<T, L, E>
+    for Condition<P, F>
+{
     fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, T, L, E> {
         self.0
             .parse(source, location)
@@ -127,7 +125,7 @@ impl<T, L: Span, E, P: Parser<T, L, E>, F: Fn(&T) -> bool> Parser<T, L, E> for C
 
 pub struct Matching<P, F>(P, F);
 
-impl<T: PartialEq<V>, V, E, L: Span, P: Parser<T, L, E>> Parser<T, L, E> for Matching<P, V> {
+impl<T: PartialEq<V>, V, E: Clone, L: Span, P: Parser<T, L, E>> Parser<T, L, E> for Matching<P, V> {
     fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, T, L, E> {
         self.0
             .parse(source, location)
@@ -157,7 +155,7 @@ where
 
 pub struct And<A, B>(A, B);
 
-impl<A, B, T: List + Clone, L: Span, E> Parser<T, L, E> for And<A, B>
+impl<A, B, T: List + Clone, L: Span, E: Clone> Parser<T, L, E> for And<A, B>
 where
     A: Parser<T, L, E>,
     B: Parser<T, L, E>,
@@ -189,7 +187,7 @@ where
 
 pub struct AndThen<P, F, T>(P, F, PhantomData<T>);
 
-impl<P, F, T, L: Span, E, Q, V> Parser<V, L, E> for AndThen<P, F, T>
+impl<P, F, T, L: Span, E: Clone, Q, V> Parser<V, L, E> for AndThen<P, F, T>
 where
     P: Parser<T, L, E>,
     Q: Parser<V, L, E>,
@@ -238,7 +236,7 @@ where
 
 pub struct Drop<A, B, V>(A, B, PhantomData<V>);
 
-impl<A, B, T: Clone, V, L: Span, E> Parser<T, L, E> for Drop<A, B, V>
+impl<A, B, T: Clone, V, L: Span, E: Clone> Parser<T, L, E> for Drop<A, B, V>
 where
     A: Parser<T, L, E>,
     B: Parser<V, L, E>,
@@ -254,7 +252,7 @@ where
 
 pub struct Skip<P, Q, T>(P, Q, PhantomData<T>);
 
-impl<P, Q, T, V, L: Span, E> Parser<V, L, E> for Skip<P, Q, T>
+impl<P, Q, T, V, L: Span, E: Clone> Parser<V, L, E> for Skip<P, Q, T>
 where
     P: Parser<T, L, E>,
     Q: Parser<V, L, E>,
@@ -283,7 +281,7 @@ impl<'p, T, L, E> Parser<T, L, E> for Boxed<dyn Parser<T, L, E> + 'p> {
 
 pub struct End<P>(P);
 
-impl<T, L: Span, E, P: Parser<T, L, E>> Parser<T, L, E> for End<P> {
+impl<T, L: Span, E: Clone, P: Parser<T, L, E>> Parser<T, L, E> for End<P> {
     fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, T, L, E> {
         self.0
             .parse(source, location)
@@ -302,13 +300,5 @@ pub struct MetaMap<P>(P);
 impl<T, L: Span, E, P: Parser<T, L, E>> Parser<Meta<T, L>, L, E> for MetaMap<P> {
     fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, Meta<T, L>, L, E> {
         self.0.parse(source, location).meta()
-    }
-}
-
-pub struct Catch<P>(P);
-
-impl<T, L: Span, E, P: Parser<T, L, E>> Parser<T, L, E> for Catch<P> {
-    fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, T, L, E> {
-        self.0.parse(source, location).catch()
     }
 }

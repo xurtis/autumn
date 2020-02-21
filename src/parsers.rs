@@ -12,24 +12,21 @@ pub fn value<T: Clone, L: Span, E>(value: T) -> impl Parser<T, L, E> {
     closure(move |source, location| success(value.clone(), source, location))
 }
 
-pub fn error<T: Clone, L: Span, E: Clone>(error: E) -> impl Parser<T, L, E> {
-    closure(move |_, location| failure(error.clone(), location))
-}
-
-pub fn throw<T: Clone, L: Span, E: Clone>(error: E) -> impl Parser<T, L, E> {
-    closure(move |_, location| exception(error.clone(), location))
+pub fn error<T: Clone, L: Span, E: Clone>(value: T, error: E) -> impl Parser<T, L, E> {
+    closure(move |source, location| failure(value.clone(), error.clone(), source, location))
 }
 
 pub fn success<T, L: Span, E>(value: T, source: &str, location: L) -> ParseResult<T, L, E> {
     ParseResult::success(value, source, location)
 }
 
-pub fn failure<'s, T, L: Span, E>(error: E, location: L) -> ParseResult<'s, T, L, E> {
-    ParseResult::error(error, location)
-}
-
-pub fn exception<'s, T, L: Span, E>(error: E, location: L) -> ParseResult<'s, T, L, E> {
-    ParseResult::exception(error, location)
+pub fn failure<'s, T, L: Span, E>(
+    value: T,
+    error: E,
+    source: &'s str,
+    location: L,
+) -> ParseResult<'s, T, L, E> {
+    ParseResult::error(value, error, source, location)
 }
 
 pub fn empty<T: List, L: Span, E>(source: &str, location: L) -> ParseResult<T, L, E> {
@@ -65,7 +62,7 @@ pub fn single_character<L: Span, E>(source: &str, mut location: L) -> ParseResul
     }
 }
 
-pub fn char_condition<'s, L: Span, E>(
+pub fn char_condition<'s, L: Span, E: Clone>(
     condition: &impl Fn(char) -> bool,
     source: &'s str,
     location: L,
@@ -75,7 +72,7 @@ pub fn char_condition<'s, L: Span, E>(
         .parse(source, location)
 }
 
-impl<L: Span, E> Parser<String, L, E> for char {
+impl<L: Span, E: Clone> Parser<String, L, E> for char {
     fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, String, L, E> {
         let character = *self;
         any_character
@@ -84,31 +81,31 @@ impl<L: Span, E> Parser<String, L, E> for char {
     }
 }
 
-pub fn character<L: Span, E>(character: char) -> impl Parser<String, L, E> {
+pub fn character<L: Span, E: Clone>(character: char) -> impl Parser<String, L, E> {
     any_character.condition(move |c: &String| c.chars().all(move |s| s == character))
 }
 
-pub fn digit<L: Span, E>(source: &str, location: L) -> ParseResult<String, L, E> {
+pub fn digit<L: Span, E: Clone>(source: &str, location: L) -> ParseResult<String, L, E> {
     char_condition(&|c| c.is_ascii_digit(), source, location)
 }
 
-pub fn alphabetic<L: Span, E>(source: &str, location: L) -> ParseResult<String, L, E> {
+pub fn alphabetic<L: Span, E: Clone>(source: &str, location: L) -> ParseResult<String, L, E> {
     char_condition(&|c| c.is_ascii_alphabetic(), source, location)
 }
 
-pub fn alphanumeric<L: Span, E>(source: &str, location: L) -> ParseResult<String, L, E> {
+pub fn alphanumeric<L: Span, E: Clone>(source: &str, location: L) -> ParseResult<String, L, E> {
     char_condition(&|c| c.is_ascii_alphanumeric(), source, location)
 }
 
-pub fn whitespace<L: Span, E>(source: &str, location: L) -> ParseResult<String, L, E> {
+pub fn whitespace<L: Span, E: Clone>(source: &str, location: L) -> ParseResult<String, L, E> {
     char_condition(&|c| c.is_whitespace(), source, location)
 }
 
-pub fn space<L: Span, E>(source: &str, location: L) -> ParseResult<String, L, E> {
+pub fn space<L: Span, E: Clone>(source: &str, location: L) -> ParseResult<String, L, E> {
     whitespace.multiple().parse(source, location)
 }
 
-pub fn exact<L: Span, E>(must_match: &'static str) -> impl Parser<String, L, E> {
+pub fn exact<L: Span, E: Clone>(must_match: &'static str) -> impl Parser<String, L, E> {
     closure::<_, _, _, E>(move |source, location| {
         if let Some(next) = must_match.chars().next() {
             let remaining = &must_match[next.len_utf8()..];
@@ -121,7 +118,7 @@ pub fn exact<L: Span, E>(must_match: &'static str) -> impl Parser<String, L, E> 
     })
 }
 
-impl<L: Span, E> Parser<String, L, E> for &'static str {
+impl<L: Span, E: Clone> Parser<String, L, E> for &'static str {
     fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, String, L, E> {
         exact(self).parse(source, location)
     }

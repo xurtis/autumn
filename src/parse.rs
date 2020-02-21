@@ -25,66 +25,62 @@ where
 #[derive(Debug)]
 pub struct ParseResult<'s, T, L, E = ()> {
     start: L,
-    parsed: Vec<(Meta<T, L>, &'s str, L)>,
-    errors: Vec<Meta<E, L>>,
-    exception: Option<Meta<E, L>>,
+    success: bool,
+    failure: bool,
+    results: Vec<(Meta<T, L>, Vec<Meta<E, L>>, &'s str, L)>,
 }
 
 impl<'s, T, L, E> ParseResult<'s, T, L, E> {
     pub fn none(location: L) -> Self {
         ParseResult {
             start: location,
-            parsed: vec![],
-            errors: vec![],
-            exception: None,
+            success: false,
+            failure: false,
+            results: vec![],
         }
     }
 
     pub fn values<'r>(&'r mut self) -> impl Iterator<Item = Meta<T, L>> + 'r {
-        self.parsed.drain(..).map(|(v, _, _)| v)
+        self.results.drain(..).map(|(value, _, _, _)| value)
     }
 
     pub fn errors<'r>(&'r mut self) -> impl Iterator<Item = Meta<E, L>> + 'r {
-        self.errors.drain(..)
-    }
-
-    pub fn uncaught_exception(&mut self) -> Option<Meta<E, L>> {
-        self.exception.take()
+        self.results.drain(..).flat_map(|(_, errors, _, _)| errors)
     }
 
     pub fn is_success(&self) -> bool {
-        self.errors.len() == 0 && self.exception.is_none() && self.parsed.len() > 0
+        self.success && !self.failure
     }
 
     pub fn is_none(&self) -> bool {
-        self.errors.len() == 0 && self.exception.is_none() && self.parsed.len() == 0
+        !self.failure && !self.success
     }
 
     pub fn single_parse(&self) -> bool {
-        self.parsed.len() == 1
+        self.results.len() == 1
     }
 
     pub fn or(self, other: Self) -> Self {
         let ParseResult {
             start,
-            mut parsed,
-            mut errors,
-            exception,
+            mut success,
+            mut failure,
+            mut results,
         } = self;
         let ParseResult {
-            parsed: mut other_parsed,
-            errors: mut other_errors,
-            exception: other_exception,
+            success: other_success,
+            failure: other_failure,
+            results: mut other_results,
             ..
         } = other;
-        parsed.append(&mut other_parsed);
-        errors.append(&mut other_errors);
-        let exception = exception.or(other_exception);
+        success |= other_success;
+        failure |= other_failure;
+        results.append(&mut other_results);
         ParseResult {
             start,
-            parsed,
-            errors,
-            exception,
+            success,
+            failure,
+            results,
         }
     }
 
@@ -94,19 +90,19 @@ impl<'s, T, L, E> ParseResult<'s, T, L, E> {
     {
         let ParseResult {
             start,
-            parsed,
-            errors,
-            exception,
+            success,
+            failure,
+            results,
         } = self;
-        let parsed = parsed
+        let results = results
             .into_iter()
-            .map(|(v, r, l)| (v.map(map), r, l))
+            .map(|(v, e, s, l)| (v.map(map), e, s, l))
             .collect();
         ParseResult {
             start,
-            parsed,
-            errors,
-            exception,
+            success,
+            failure,
+            results,
         }
     }
 }
@@ -115,137 +111,113 @@ impl<'s, T, L: Clone, E> ParseResult<'s, T, L, E> {
     pub fn meta(self) -> ParseResult<'s, Meta<T, L>, L, E> {
         let ParseResult {
             start,
-            parsed,
-            errors,
-            exception,
+            success,
+            failure,
+            results,
         } = self;
-        let parsed = parsed
+        let results = results
             .into_iter()
-            .map(|(v, r, l)| (v.split(), r, l))
-            .map(|((v, s), r, l)| (Meta::new(Meta::new(v, s.clone()), s), r, l))
+            .map(|(v, e, i, l)| (v.split(), e, i, l))
+            .map(|((v, s), e, i, l)| (Meta::new(Meta::new(v, s.clone()), s), e, i, l))
             .collect();
         ParseResult {
             start,
-            parsed,
-            errors,
-            exception,
+            success,
+            failure,
+            results,
         }
     }
 }
 
 impl<'s, T, L: Span, E> ParseResult<'s, T, L, E> {
-    pub fn error(error: E, location: L) -> Self {
+    pub fn error(value: T, error: E, source: &'s str, mut location: L) -> Self {
+        let parse_location = location.take();
+        let value = Meta::new(value, parse_location.clone());
+        let error = Meta::new(error, parse_location);
         ParseResult {
             start: location.clone(),
-            parsed: vec![],
-            errors: vec![Meta::new(error, location)],
-            exception: None,
-        }
-    }
-
-    pub fn exception(error: E, location: L) -> Self {
-        ParseResult {
-            start: location.clone(),
-            parsed: vec![],
-            errors: vec![],
-            exception: Some(Meta::new(error, location)),
+            success: false,
+            failure: true,
+            results: vec![(value, vec![error], source, location)],
         }
     }
 
     pub fn success(value: T, source: &'s str, mut location: L) -> Self {
         ParseResult {
             start: location.clone(),
-            parsed: vec![(Meta::new(value, location.take()), source, location)],
-            errors: vec![],
-            exception: None,
-        }
-    }
-
-    pub fn and_then<A, F>(self, next: &F) -> ParseResult<'s, A, L, E>
-    where
-        F: Fn(T, &'s str, L) -> ParseResult<'s, A, L, E>,
-    {
-        let ParseResult {
-            start,
-            parsed,
-            mut errors,
-            mut exception,
-        } = self;
-        let mut new_parsed = vec![];
-        let iter = parsed
-            .into_iter()
-            .map(|(v, r, l)| v.map(|v| next(v, r, l.clone())))
-            .map(unfold);
-        for ParseResult {
-            mut parsed,
-            errors: mut new_errors,
-            exception: new_exception,
-            ..
-        } in iter
-        {
-            new_parsed.append(&mut parsed);
-            errors.append(&mut new_errors);
-            exception = exception.or(new_exception);
-        }
-        ParseResult {
-            start,
-            parsed: new_parsed,
-            errors,
-            exception,
-        }
-    }
-
-    pub fn catch(self) -> ParseResult<'s, T, L, E> {
-        let ParseResult {
-            start,
-            parsed,
-            mut errors,
-            exception,
-        } = self;
-        let exceptions = exception
-            .into_iter()
-            .map(|e| e.split())
-            .map(|(error, mut location)| {
-                location.move_start(start.start().clone());
-                Meta::new(error, location)
-            });
-        for exception in exceptions {
-            errors.push(exception);
-        }
-        ParseResult {
-            start,
-            parsed,
-            errors,
-            exception: None,
+            success: true,
+            failure: false,
+            results: vec![(Meta::new(value, location.take()), vec![], source, location)],
         }
     }
 }
 
-fn unfold<'s, T, L: Span, E>(meta: Meta<ParseResult<'s, T, L, E>, L>) -> ParseResult<'s, T, L, E> {
+impl<'s, T, L: Span, E: Clone> ParseResult<'s, T, L, E> {
+    pub fn and_then<A, F>(self, next: &F) -> ParseResult<'s, A, L, E>
+    where
+        F: Fn(T, &'s str, L) -> ParseResult<'s, A, L, E>,
+    {
+        let ParseResult { start, results, .. } = self;
+        let mut new_results = vec![];
+        let mut success = false;
+        let mut failure = false;
+        let iter = results
+            .into_iter()
+            .map(|(v, e, s, l)| (v.map(|v| next(v, s, l.clone())), e))
+            .map(unfold);
+        for ParseResult {
+            mut results,
+            success: new_success,
+            failure: new_failure,
+            ..
+        } in iter
+        {
+            success |= new_success;
+            failure |= new_failure;
+            new_results.append(&mut results);
+        }
+        ParseResult {
+            start,
+            success,
+            failure,
+            results: new_results,
+        }
+    }
+}
+
+fn unfold<'s, T, L: Span, E: Clone>(
+    (meta, errors): (Meta<ParseResult<'s, T, L, E>, L>, Vec<Meta<E, L>>),
+) -> ParseResult<'s, T, L, E> {
     let (
         ParseResult {
-            parsed,
-            errors,
-            exception,
+            success,
+            mut failure,
+            results,
             ..
         },
         start,
     ) = meta.split();
 
-    let parsed = parsed
+    let results: Vec<_> = results
         .into_iter()
-        .map(|(p, r, l)| (p.split(), r, l))
-        .map(|((value, mut location), r, l)| {
+        .map(|(v, e, s, l)| (v.split(), e, s, l))
+        .map(|((value, mut location), inner_errors, r, l)| {
             location.move_start(start.start().clone());
-            (Meta::new(value, location), r, l)
+            let errors = errors.iter().fold(inner_errors, |mut errors, error| {
+                errors.push(error.clone());
+                errors
+            });
+            (Meta::new(value, location), errors, r, l)
         })
         .collect();
 
+    failure |= results.iter().any(|(_, errors, _, _)| errors.len() > 0);
+
     ParseResult {
         start,
-        parsed,
-        errors,
-        exception,
+        success,
+        failure,
+        results,
     }
 }
 
