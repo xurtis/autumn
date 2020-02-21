@@ -14,7 +14,7 @@ pub fn new_location() -> impl Span + fmt::Display {
 /// Create a new source file location that knows the source path to the file.
 ///
 /// This will create a location for the start of the source file with the given path.
-pub fn path_location<P>(path: P) -> impl Span + fmt::Display
+pub fn path_location<P>(path: P) -> impl Span + fmt::Display + AsRef<Path>
 where
     P: AsRef<Path> + Clone + fmt::Debug,
 {
@@ -277,6 +277,12 @@ impl<P: AsRef<Path> + Clone + fmt::Debug, I: Span + fmt::Debug> Span for FileSou
 
     fn end_mut(&mut self) -> &mut Self::Location {
         self.inner.end_mut()
+    }
+}
+
+impl<P: AsRef<Path>, I> AsRef<Path> for FileSource<P, I> {
+    fn as_ref(&self) -> &Path {
+        self.path.as_ref()
     }
 }
 
