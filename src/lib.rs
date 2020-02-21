@@ -13,7 +13,8 @@
 //! use autumn::prelude::*;
 //!
 //! fn parser<L: Span>(source: &str, location: L) -> ParseResult<String, L> {
-//!     unimplemented!()
+//!     /* ... */
+//! #   unimplemented!()
 //! }
 //! ```
 //!
@@ -42,23 +43,27 @@
 //!
 //! /// Accumulate the characters for a single identifier into a string
 //! fn identifier<L: Span>(source: &str, location: L) -> ParseResult<String, L> {
-//!     identifier_prefix.and(identifier_body).map(|s| s.to_string()).parse(source, location)
+//!     identifier_prefix
+//!         .and(identifier_body)
+//!         .map(|s| s.to_string())
+//!         .end()
+//!         .parse(source, location)
 //! }
-//!
-//! for code in &["hello", "world", "_underscore", "_with_numb3r5"] {
-//!     // Parse each string as a single identifier, ensure the whole string is consumed
-//!     let result = identifier.end().parse(code, new_location());
-//!     assert!(result.is_success());
-//!     assert!(result.single_parse());
-//!     let value = result.values().next().unwrap();
-//!     assert_eq!(value.inner_ref(), code);
-//! }
-//!
-//! for code in &["12l", "5.3", "function(12)", "1 + 2"] {
-//!     // Parse each string as a single identifier, ensure the whole string is consumed
-//!     let result = identifier.end().parse(code, new_location());
-//!     assert!(!result.is_success());
-//! }
+//! #
+//! # for code in &["hello", "world", "_underscore", "_with_numb3r5"] {
+//! #     // Parse each string as a single identifier, ensure the whole string is consumed
+//! #     let result = identifier.end().parse(code, new_location());
+//! #     assert!(result.is_success());
+//! #     assert!(result.single_parse());
+//! #     let value = result.values().next().unwrap();
+//! #     assert_eq!(value.inner_ref(), code);
+//! # }
+//! #
+//! # for code in &["12l", "5.3", "function(12)", "1 + 2"] {
+//! #     // Parse each string as a single identifier, ensure the whole string is consumed
+//! #     let result = identifier.end().parse(code, new_location());
+//! #     assert!(!result.is_success());
+//! # }
 //! ```
 //!
 //! As the functions above each implement the [`Parser`](trait.Parser.html) trait,
