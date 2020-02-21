@@ -23,14 +23,14 @@ fn main() -> Result<()> {
             break;
         }
 
-        let mut result = expression.parse(&expr, new_location());
+        let result = expression.parse(&expr, new_location());
         if result.is_success() {
             for result in result.values() {
-                println!(" = {}", result.inner());
+                println!(" = {}", result.inner_ref());
             }
         } else {
-            for error in result.errors() {
-                println!("Err: {}", error.as_ref());
+            for error in result.cloned_errors() {
+                println!("Err: {}", error);
             }
         }
     }
@@ -69,8 +69,9 @@ fn expression<L: Span>(source: &str, location: L) -> ParseResult<i32, L, EvalErr
                 .drop(space)
                 .end()
                 .map(|s| s.to_string())
-                .and_then(|text| error(1, InvalidExpression(text))),
+                .and_then(|text| throw(1, InvalidExpression(text))),
         )
+        .catch()
         .parse(source, location)
 }
 
@@ -109,11 +110,12 @@ fn div<L: Span>(source: &str, location: L) -> ParseResult<i32, L, EvalError> {
                 if right != 0 {
                     value(left / right).boxed()
                 } else {
-                    error(1, DivisionByZero(left, right)).boxed()
+                    throw(1, DivisionByZero(left, right)).boxed()
                 }
             })
             .or(value(left))
     })
+    .catch()
     .parse(source, location)
 }
 
@@ -126,11 +128,12 @@ fn rem<L: Span>(source: &str, location: L) -> ParseResult<i32, L, EvalError> {
                     if right != 0 {
                         value(left % right).boxed()
                     } else {
-                        error(1, ModuloZero(left, right)).boxed()
+                        throw(1, ModuloZero(left, right)).boxed()
                     }
                 })
                 .or(value(left))
         })
+        .catch()
         .parse(source, location)
 }
 
@@ -146,8 +149,9 @@ fn paren<L: Span>(source: &str, location: L) -> ParseResult<i32, L, EvalError> {
                 .map(List::single)
                 .multiple()
                 .map(|s| s.to_string())
-                .and_then(|text| error(1, InvalidLiteral(text))),
+                .and_then(|text| throw(1, InvalidLiteral(text))),
         )
+        .catch()
         .parse(source, location)
 }
 

@@ -62,6 +62,10 @@ pub trait ParserExt<T, L, E>: Parser<T, L, E> + Sized {
         End(self)
     }
 
+    fn catch(self) -> Catch<Self> {
+        Catch(self)
+    }
+
     fn meta(self) -> MetaMap<Self> {
         MetaMap(self)
     }
@@ -284,6 +288,14 @@ impl<T, L: Span, E, P: Parser<T, L, E>> Parser<T, L, E> for End<P> {
                     ParseResult::none(location)
                 }
             })
+    }
+}
+
+pub struct Catch<P>(P);
+
+impl<T, L, E, P: Parser<T, L, E>> Parser<T, L, E> for Catch<P> {
+    fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, T, L, E> {
+        self.0.parse(source, location).catch()
     }
 }
 

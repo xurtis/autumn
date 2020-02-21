@@ -47,7 +47,7 @@ mod tests {
     fn simple_tokens() {
         for valid_token in VALID_TOKENS {
             println!("\n{:#?}", valid_token);
-            let mut result = token.end().parse(valid_token, new_location());
+            let result = token.end().parse(valid_token, new_location());
             assert!(result.is_success());
             for value in result.values() {
                 println!("{:?}", *value);
@@ -77,7 +77,7 @@ mod tests {
 
         for token_sequence in VALID_SEQUENCES {
             println!("\n{:#?}", token_sequence);
-            let mut result = sequence(token_sequence, new_location());
+            let result = sequence(token_sequence, new_location());
             assert!(result.is_success());
             for value in result.values() {
                 println!("{:?}", *value);
@@ -191,7 +191,7 @@ mod tests {
         println!();
         for expression in S_EXPRESSIONS {
             println!("\n{:#?}", expression);
-            let mut result = sexpression.end().parse(expression, new_location());
+            let result = sexpression.end().parse(expression, new_location());
             assert!(result.is_success());
             for value in result.values() {
                 println!("{:#?}", *value);

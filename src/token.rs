@@ -384,12 +384,12 @@ mod tests {
     fn identifiers() {
         for identifier_token in IDENTIFIERS {
             println!("\n{:?}", identifier_token);
-            let mut result: ParseResult<_, _> =
+            let result: ParseResult<_, _> =
                 identifier.end().parse(identifier_token, new_location());
             assert!(result.is_success());
             assert!(result.single_parse());
             for value in result.values() {
-                println!("{:?}", value.inner());
+                println!("{:?}", value.inner_ref());
             }
         }
     }
@@ -417,11 +417,11 @@ mod tests {
     fn sequences() {
         for token_sequence in SEQUENCES {
             println!("\n{:?}", token_sequence);
-            let mut result: ParseResult<_, _> = sequence(token_sequence, new_location());
+            let result: ParseResult<_, _> = sequence(token_sequence, new_location());
             assert!(result.is_success());
             assert!(result.single_parse());
             for value in result.values() {
-                println!("{:?}", value.inner());
+                println!("{:?}", value.inner_ref());
             }
         }
     }
