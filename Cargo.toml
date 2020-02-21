@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["Curtis Millar <curtis@curtism.me>"]
 edition = "2018"
 readme = "README.md"
+license = "ISC"
 
 [lib]
 path = "src/lib.rs"
