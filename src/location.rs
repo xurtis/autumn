@@ -32,6 +32,9 @@ pub trait Location: Sized + Clone + fmt::Debug {
     /// Get the chracter index in the source (0-indexed)
     fn character(&self) -> usize;
 
+    /// Get the bytes index in the source (0-indexed)
+    fn byte(&self) -> usize;
+
     /// Get the row in the source (0-indexed)
     fn row(&self) -> usize;
 
@@ -77,6 +80,11 @@ pub trait Span: Sized + Clone + fmt::Debug {
         self.end().character() - self.start().character()
     }
 
+    /// Get the number of bytes between the start and the end
+    fn bytes(&self) -> usize {
+        self.end().byte() - self.start().byte()
+    }
+
     /// Move the start position of a span
     fn move_start(&mut self, new_start: Self::Location) {
         *self.start_mut() = new_start;
@@ -116,6 +124,7 @@ pub trait Span: Sized + Clone + fmt::Debug {
 #[derive(Debug, Default, Clone, Copy)]
 struct SourceLocation {
     character: usize,
+    byte: usize,
     row: usize,
     column: usize,
 }
@@ -133,6 +142,10 @@ impl Location for SourceLocation {
         self.character
     }
 
+    fn byte(&self) -> usize {
+        self.byte
+    }
+
     fn row(&self) -> usize {
         self.row
     }
@@ -143,6 +156,7 @@ impl Location for SourceLocation {
 
     fn after(&mut self, next_character: char) {
         self.character += 1;
+        self.byte += next_character.len_utf8();
 
         if next_character == '\n' {
             self.row += 1;
@@ -220,6 +234,10 @@ impl<P: AsRef<Path> + Clone + fmt::Debug, I: Location> Location for FileSource<P
 
     fn character(&self) -> usize {
         self.inner.character()
+    }
+
+    fn byte(&self) -> usize {
+        self.inner.byte()
     }
 
     fn row(&self) -> usize {
@@ -342,6 +360,10 @@ impl<T: Clone + fmt::Debug, I: Location> Location for Meta<T, I> {
 
     fn character(&self) -> usize {
         self.location.character()
+    }
+
+    fn byte(&self) -> usize {
+        self.location.byte()
     }
 
     fn row(&self) -> usize {
