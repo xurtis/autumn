@@ -1,13 +1,6 @@
 use crate::location::{Meta, Span};
 use std::rc::Rc;
 
-pub fn parse<'s, T, L, E, P>(parser: &P, source: &'s str, location: L) -> ParseResult<'s, T, L, E>
-where
-    P: Parser<T, L, E>,
-{
-    parser.parse(source, location)
-}
-
 /// A parser takes an input source and produces an array of potential tagged values and an array of
 /// errors.
 pub trait Parser<T, L, E = ()> {
@@ -32,15 +25,6 @@ pub struct ParseResult<'s, T, L, E = ()> {
 }
 
 impl<'s, T, L, E> ParseResult<'s, T, L, E> {
-    pub fn none(location: L) -> Self {
-        ParseResult {
-            start: location,
-            success: false,
-            failure: false,
-            results: vec![],
-        }
-    }
-
     pub fn values<'r>(&'r self) -> impl Iterator<Item = &'r Meta<T, L>> + 'r {
         self.results.iter().map(InnerResult::value)
     }
@@ -57,7 +41,16 @@ impl<'s, T, L, E> ParseResult<'s, T, L, E> {
         self.results.len() == 1
     }
 
-    pub fn or(self, other: Self) -> Self {
+    pub(crate) fn none(location: L) -> Self {
+        ParseResult {
+            start: location,
+            success: false,
+            failure: false,
+            results: vec![],
+        }
+    }
+
+    pub(crate) fn or(self, other: Self) -> Self {
         let ParseResult {
             start,
             mut success,
@@ -81,7 +74,7 @@ impl<'s, T, L, E> ParseResult<'s, T, L, E> {
         }
     }
 
-    pub fn map<A, F>(self, map: &F) -> ParseResult<'s, A, L, E>
+    pub(crate) fn map<A, F>(self, map: &F) -> ParseResult<'s, A, L, E>
     where
         F: Fn(T) -> A,
     {
@@ -100,7 +93,7 @@ impl<'s, T, L, E> ParseResult<'s, T, L, E> {
         }
     }
 
-    pub fn catch(self) -> Self {
+    pub(crate) fn catch(self) -> Self {
         let ParseResult {
             start,
             success,
@@ -132,7 +125,7 @@ impl<'s, T, L: Clone, E> ParseResult<'s, T, L, E> {
             .map(|error| error.as_ref().clone())
     }
 
-    pub fn meta(self) -> ParseResult<'s, Meta<T, L>, L, E> {
+    pub(crate) fn meta(self) -> ParseResult<'s, Meta<T, L>, L, E> {
         let ParseResult {
             start,
             success,
@@ -166,7 +159,7 @@ impl<'s, T, L: Clone, E: Clone> ParseResult<'s, T, L, E> {
 }
 
 impl<'s, T, L: Span, E> ParseResult<'s, T, L, E> {
-    pub fn error(value: T, error: E, source: &'s str, location: L) -> Self {
+    pub(crate) fn error(value: T, error: E, source: &'s str, location: L) -> Self {
         ParseResult {
             start: location.clone(),
             success: false,
@@ -175,7 +168,7 @@ impl<'s, T, L: Span, E> ParseResult<'s, T, L, E> {
         }
     }
 
-    pub fn exception(value: T, error: E, source: &'s str, location: L) -> Self {
+    pub(crate) fn exception(value: T, error: E, source: &'s str, location: L) -> Self {
         ParseResult {
             start: location.clone(),
             success: false,
@@ -184,7 +177,7 @@ impl<'s, T, L: Span, E> ParseResult<'s, T, L, E> {
         }
     }
 
-    pub fn success(value: T, source: &'s str, location: L) -> Self {
+    pub(crate) fn success(value: T, source: &'s str, location: L) -> Self {
         ParseResult {
             start: location.clone(),
             success: true,
@@ -193,7 +186,7 @@ impl<'s, T, L: Span, E> ParseResult<'s, T, L, E> {
         }
     }
 
-    pub fn and_then<A, F>(self, next: &F) -> ParseResult<'s, A, L, E>
+    pub(crate) fn and_then<A, F>(self, next: &F) -> ParseResult<'s, A, L, E>
     where
         F: Fn(T, &'s str, L) -> ParseResult<'s, A, L, E>,
     {
@@ -449,7 +442,7 @@ impl<T> List<T> {
         List(Rc::new(node), *length + 1)
     }
 
-    pub fn push_rc(&self, value: Rc<T>) -> Self {
+    fn push_rc(&self, value: Rc<T>) -> Self {
         let List(node, length) = self;
         let node = Node::Node(value, node.clone());
         List(Rc::new(node), *length + 1)

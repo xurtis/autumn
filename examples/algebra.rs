@@ -1,7 +1,6 @@
 //! Simple integer algebraic language
 
-use autumn::parsers::*;
-use autumn::*;
+use autumn::prelude::*;
 
 use std::fmt;
 use std::io::{stdin, stdout, BufRead, BufReader, Write};

@@ -6,16 +6,18 @@ mod parse;
 pub mod parsers;
 pub mod token;
 
-pub use combinators::{BoxedParserExt, ParserExt};
 pub use location::{new_location, path_location, Location, Meta, Span};
-pub use parse::{parse, List, ParseResult, Parser};
+pub use parse::{List, ParseResult, Parser};
+
+pub mod prelude {
+    pub use crate::combinators::{BoxedParserExt, ParserExt};
+    pub use crate::parsers::*;
+    pub use crate::{new_location, path_location, List, Meta, ParseResult, Parser, Span};
+}
 
 #[cfg(test)]
 mod tests {
-    use crate::parsers::*;
-    use crate::*;
-
-    use crate::location::{new_location, Meta, Span};
+    use crate::prelude::*;
 
     const VALID_TOKENS: &'static [&'static str] = &["A", "ABC", "ABC123", "_ABC123"];
 

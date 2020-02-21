@@ -1,7 +1,7 @@
 //! Basic general-purpose parsers
 
+use crate::combinators::ParserExt;
 use crate::location::Span;
-use crate::ParserExt;
 use crate::{List, ParseResult, Parser};
 
 pub fn none<T, L, E>(_: &str, location: L) -> ParseResult<T, L, E> {
@@ -20,11 +20,11 @@ pub fn throw<T: Clone, L: Span, E: Clone>(value: T, error: E) -> impl Parser<T, 
     closure(move |source, location| exception(value.clone(), error.clone(), source, location))
 }
 
-pub fn success<T, L: Span, E>(value: T, source: &str, location: L) -> ParseResult<T, L, E> {
+fn success<T, L: Span, E>(value: T, source: &str, location: L) -> ParseResult<T, L, E> {
     ParseResult::success(value, source, location)
 }
 
-pub fn failure<'s, T, L: Span, E>(
+fn failure<'s, T, L: Span, E>(
     value: T,
     error: E,
     source: &'s str,
@@ -33,7 +33,7 @@ pub fn failure<'s, T, L: Span, E>(
     ParseResult::error(value, error, source, location)
 }
 
-pub fn exception<'s, T, L: Span, E>(
+fn exception<'s, T, L: Span, E>(
     value: T,
     error: E,
     source: &'s str,
@@ -71,7 +71,7 @@ pub fn single_character<L: Span, E>(source: &str, mut location: L) -> ParseResul
     }
 }
 
-pub fn char_condition<'s, L: Span, E>(
+fn char_condition<'s, L: Span, E>(
     condition: &impl Fn(char) -> bool,
     source: &'s str,
     location: L,

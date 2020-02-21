@@ -1,7 +1,4 @@
-use crate::combinators::*;
-use crate::location::Span;
-use crate::parse::*;
-use crate::parsers::*;
+use crate::prelude::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
@@ -67,27 +64,25 @@ fn number_prefix<L: Span, E>((sign, base): (Sign, Base)) -> impl Parser<SignedNu
     use Digits::*;
     use SignedNumber::*;
     closure(move |source, location| {
-        base.parse(source, location)
-            .and_then(&|value, source, location| match (sign, value) {
-                (Sign::Unsigned, Integer(value)) => success(Unsigned(value), source, location),
-                (Sign::Unsigned, Digits::Real(value, divisor)) => {
-                    success(SignedNumber::Real(value, divisor < 1f64), source, location)
-                }
-                (Sign::Positive, Integer(value)) => success(Signed(value as i64), source, location),
-                (Sign::Positive, Digits::Real(value, divisor)) => {
-                    success(SignedNumber::Real(value, divisor < 1f64), source, location)
-                }
-                (Sign::Negative, Integer(value)) => {
-                    success(Signed(-(value as i64)), source, location)
-                }
-                (Sign::Negative, Digits::Real(value, divisor)) => {
-                    success(SignedNumber::Real(-value, divisor < 1f64), source, location)
-                }
-            })
+        base.and_then(|number| match (sign, number) {
+            (Sign::Unsigned, Integer(number)) => value(Unsigned(number)),
+            (Sign::Unsigned, Digits::Real(number, divisor)) => {
+                value(SignedNumber::Real(number, divisor < 1f64))
+            }
+            (Sign::Positive, Integer(number)) => value(Signed(number as i64)),
+            (Sign::Positive, Digits::Real(number, divisor)) => {
+                value(SignedNumber::Real(number, divisor < 1f64))
+            }
+            (Sign::Negative, Integer(number)) => value(Signed(-(number as i64))),
+            (Sign::Negative, Digits::Real(number, divisor)) => {
+                value(SignedNumber::Real(-number, divisor < 1f64))
+            }
+        })
+        .parse(source, location)
     })
 }
 
-fn number_suffix<L: Span, E>(number: SignedNumber) -> impl Parser<Number, L, E> {
+fn number_suffix<'s, L: Span + 's, E: 's>(number: SignedNumber) -> impl Parser<Number, L, E> + 's {
     use Number::*;
     use SignedNumber::*;
 
@@ -105,50 +100,47 @@ fn number_suffix<L: Span, E>(number: SignedNumber) -> impl Parser<Number, L, E> 
         .or("usize");
     let real = exact("r").or("r32").or("r64");
 
-    let suffix = signed.or(unsigned).or(real).maybe().map(|s| s.to_string());
+    signed
+        .or(unsigned)
+        .or(real)
+        .maybe()
+        .map(|s| s.to_string())
+        .and_then(move |suffix| {
+            match (number, suffix.as_str()) {
+                // Automatic types
+                (Unsigned(number), "") => value(Unsigned64(number)).boxed(),
+                (Signed(number), "") => value(Integer64(number)).boxed(),
+                (Real(number, true), "") => value(Real64(number)).boxed(),
 
-    closure(move |source, location| {
-        suffix
-            .parse(source, location)
-            .and_then(&|suffix, source, location| {
-                match (number, suffix.as_str()) {
-                    // Automatic types
-                    (Unsigned(value), "") => success(Unsigned64(value), source, location),
-                    (Signed(value), "") => success(Integer64(value), source, location),
-                    (Real(value, true), "") => success(Real64(value), source, location),
+                // Unsigned
+                (Unsigned(number), "u") => value(Unsigned64(number)).boxed(),
+                (Unsigned(number), "u8") => value(Unsigned8(number as u8)).boxed(),
+                (Unsigned(number), "u16") => value(Unsigned16(number as u16)).boxed(),
+                (Unsigned(number), "u32") => value(Unsigned32(number as u32)).boxed(),
+                (Unsigned(number), "u64") => value(Unsigned64(number)).boxed(),
+                (Unsigned(number), "usize") => value(UnsignedSize(number)).boxed(),
 
-                    // Unsigned
-                    (Unsigned(value), "u") => success(Unsigned64(value), source, location),
-                    (Unsigned(value), "u8") => success(Unsigned8(value as u8), source, location),
-                    (Unsigned(value), "u16") => success(Unsigned16(value as u16), source, location),
-                    (Unsigned(value), "u32") => success(Unsigned32(value as u32), source, location),
-                    (Unsigned(value), "u64") => success(Unsigned64(value), source, location),
-                    (Unsigned(value), "usize") => success(UnsignedSize(value), source, location),
+                // Signed
+                (Unsigned(number), "i") => value(Integer64(number as i64)).boxed(),
+                (Unsigned(number), "i8") => value(Integer8(number as i8)).boxed(),
+                (Unsigned(number), "i16") => value(Integer16(number as i16)).boxed(),
+                (Unsigned(number), "i32") => value(Integer32(number as i32)).boxed(),
+                (Unsigned(number), "i64") => value(Integer64(number as i64)).boxed(),
+                (Unsigned(number), "isize") => value(IntegerSize(number as i64)).boxed(),
+                (Signed(number), "i") => value(Integer64(number)).boxed(),
+                (Signed(number), "i8") => value(Integer8(number as i8)).boxed(),
+                (Signed(number), "i16") => value(Integer16(number as i16)).boxed(),
+                (Signed(number), "i32") => value(Integer32(number as i32)).boxed(),
+                (Signed(number), "i64") => value(Integer64(number)).boxed(),
+                (Signed(number), "isize") => value(IntegerSize(number)).boxed(),
 
-                    // Signed
-                    (Unsigned(value), "i") => success(Integer64(value as i64), source, location),
-                    (Unsigned(value), "i8") => success(Integer8(value as i8), source, location),
-                    (Unsigned(value), "i16") => success(Integer16(value as i16), source, location),
-                    (Unsigned(value), "i32") => success(Integer32(value as i32), source, location),
-                    (Unsigned(value), "i64") => success(Integer64(value as i64), source, location),
-                    (Unsigned(value), "isize") => {
-                        success(IntegerSize(value as i64), source, location)
-                    }
-                    (Signed(value), "i") => success(Integer64(value), source, location),
-                    (Signed(value), "i8") => success(Integer8(value as i8), source, location),
-                    (Signed(value), "i16") => success(Integer16(value as i16), source, location),
-                    (Signed(value), "i32") => success(Integer32(value as i32), source, location),
-                    (Signed(value), "i64") => success(Integer64(value), source, location),
-                    (Signed(value), "isize") => success(IntegerSize(value), source, location),
-
-                    // Floating-point
-                    (Real(value, _), "r") => success(Real64(value), source, location),
-                    (Real(value, _), "r32") => success(Real32(value as f32), source, location),
-                    (Real(value, _), "r64") => success(Real64(value), source, location),
-                    _ => ParseResult::none(location),
-                }
-            })
-    })
+                // Floating-point
+                (Real(number, _), "r") => value(Real64(number)).boxed(),
+                (Real(number, _), "r32") => value(Real32(number as f32)).boxed(),
+                (Real(number, _), "r64") => value(Real64(number)).boxed(),
+                _ => none.boxed(),
+            }
+        })
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -363,7 +355,6 @@ pub fn string_literal<L: Span, E>(source: &str, location: L) -> ParseResult<Stri
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::location::new_location;
 
     fn sequence<L: Span, E>(source: &str, location: L) -> ParseResult<List<Token>, L, E> {
         fn token_list<L: Span, E>(source: &str, location: L) -> ParseResult<List<Token>, L, E> {
