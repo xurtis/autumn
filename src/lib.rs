@@ -4,7 +4,6 @@ pub mod combinators;
 mod location;
 mod parse;
 pub mod parsers;
-pub mod token;
 
 pub use location::{new_location, path_location, Location, Meta, Span};
 pub use parse::{List, ParseResult, Parser};
