@@ -30,7 +30,7 @@ fn main() -> Result<()> {
             }
         } else {
             for error in result.errors() {
-                println!("Err: {}", error);
+                println!("Err: {}", error.as_ref());
             }
         }
     }

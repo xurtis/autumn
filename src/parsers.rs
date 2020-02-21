@@ -58,7 +58,7 @@ pub fn single_character<L: Span, E>(source: &str, mut location: L) -> ParseResul
     }
 }
 
-pub fn char_condition<'s, L: Span, E: Clone>(
+pub fn char_condition<'s, L: Span, E>(
     condition: &impl Fn(char) -> bool,
     source: &'s str,
     location: L,
@@ -68,7 +68,7 @@ pub fn char_condition<'s, L: Span, E: Clone>(
         .parse(source, location)
 }
 
-impl<L: Span, E: Clone> Parser<List<char>, L, E> for char {
+impl<L: Span, E> Parser<List<char>, L, E> for char {
     fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, List<char>, L, E> {
         let character = *self;
         any_character
@@ -77,31 +77,31 @@ impl<L: Span, E: Clone> Parser<List<char>, L, E> for char {
     }
 }
 
-pub fn character<L: Span, E: Clone>(character: char) -> impl Parser<List<char>, L, E> {
+pub fn character<L: Span, E>(character: char) -> impl Parser<List<char>, L, E> {
     any_character.condition(move |c| c.clone().all(move |c| *c == character))
 }
 
-pub fn digit<L: Span, E: Clone>(source: &str, location: L) -> ParseResult<List<char>, L, E> {
+pub fn digit<L: Span, E>(source: &str, location: L) -> ParseResult<List<char>, L, E> {
     char_condition(&|c| c.is_ascii_digit(), source, location)
 }
 
-pub fn alphabetic<L: Span, E: Clone>(source: &str, location: L) -> ParseResult<List<char>, L, E> {
+pub fn alphabetic<L: Span, E>(source: &str, location: L) -> ParseResult<List<char>, L, E> {
     char_condition(&|c| c.is_ascii_alphabetic(), source, location)
 }
 
-pub fn alphanumeric<L: Span, E: Clone>(source: &str, location: L) -> ParseResult<List<char>, L, E> {
+pub fn alphanumeric<L: Span, E>(source: &str, location: L) -> ParseResult<List<char>, L, E> {
     char_condition(&|c| c.is_ascii_alphanumeric(), source, location)
 }
 
-pub fn whitespace<L: Span, E: Clone>(source: &str, location: L) -> ParseResult<List<char>, L, E> {
+pub fn whitespace<L: Span, E>(source: &str, location: L) -> ParseResult<List<char>, L, E> {
     char_condition(&|c| c.is_whitespace(), source, location)
 }
 
-pub fn space<L: Span, E: Clone>(source: &str, location: L) -> ParseResult<List<char>, L, E> {
+pub fn space<L: Span, E>(source: &str, location: L) -> ParseResult<List<char>, L, E> {
     whitespace.multiple().parse(source, location)
 }
 
-pub fn exact<L: Span, E: Clone>(must_match: &'static str) -> impl Parser<List<char>, L, E> {
+pub fn exact<L: Span, E>(must_match: &'static str) -> impl Parser<List<char>, L, E> {
     closure::<_, _, _, E>(move |source, location| {
         if let Some(next) = must_match.chars().next() {
             let remaining = &must_match[next.len_utf8()..];
@@ -114,7 +114,7 @@ pub fn exact<L: Span, E: Clone>(must_match: &'static str) -> impl Parser<List<ch
     })
 }
 
-impl<L: Span, E: Clone> Parser<List<char>, L, E> for &'static str {
+impl<L: Span, E> Parser<List<char>, L, E> for &'static str {
     fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, List<char>, L, E> {
         exact(self).parse(source, location)
     }
