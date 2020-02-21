@@ -1,4 +1,4 @@
-//! Simple integer algebraic language
+//! Simple integer arithmetic language
 
 use autumn::prelude::*;
 
