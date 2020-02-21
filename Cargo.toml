@@ -6,6 +6,18 @@ edition = "2018"
 readme = "README.md"
 license = "ISC"
 description = "A recursive descent parser combinator library"
+repository = "https://github.com/xurtis/autumn"
+
+keywords = [
+	"recursive",
+	"descent",
+	"parser",
+	"combinator",
+	"lexer",
+	"token",
+	"lanugage"
+]
+categories = [ "parsing" ]
 
 [badges]
 maintenance = { status = "passively-maintained" }
