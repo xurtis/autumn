@@ -5,6 +5,10 @@ authors = ["Curtis Millar <curtis@curtism.me>"]
 edition = "2018"
 readme = "README.md"
 license = "ISC"
+description = "A recursive descent parser combinator library"
+
+[badges]
+maintenance = { status = "passively-maintained" }
 
 [lib]
 path = "src/lib.rs"
