@@ -20,15 +20,16 @@ pub fn token<L: Span, E: Clone>(source: &str, location: L) -> ParseResult<Token,
 }
 
 pub fn identifier<L: Span, E: Clone>(source: &str, location: L) -> ParseResult<String, L, E> {
-    fn ident_prefix<L: Span, E: Clone>(source: &str, location: L) -> ParseResult<String, L, E> {
+    fn ident_prefix<L: Span, E: Clone>(source: &str, location: L) -> ParseResult<List<char>, L, E> {
         alphabetic.or('_').or('-').parse(source, location)
     }
-    fn ident_suffix<L: Span, E: Clone>(source: &str, location: L) -> ParseResult<String, L, E> {
+    fn ident_suffix<L: Span, E: Clone>(source: &str, location: L) -> ParseResult<List<char>, L, E> {
         ident_prefix.or(digit).parse(source, location)
     }
 
     ident_prefix
         .and(ident_suffix.multiple().maybe())
+        .map(|s| s.to_string())
         .parse(source, location)
 }
 
@@ -104,7 +105,7 @@ fn number_suffix<L: Span, E: Clone>(number: SignedNumber) -> impl Parser<Number,
         .or("usize");
     let real = exact("r").or("r32").or("r64");
 
-    let suffix = signed.or(unsigned).or(real).maybe();
+    let suffix = signed.or(unsigned).or(real).maybe().map(|s| s.to_string());
 
     closure(move |source, location| {
         suffix
@@ -162,7 +163,7 @@ fn sign<L: Span, E: Clone>(source: &str, location: L) -> ParseResult<Sign, L, E>
     character('-')
         .or('+')
         .maybe()
-        .map(|s: String| match s.as_str() {
+        .map(|s| match s.to_string().as_str() {
             "-" => Negative,
             "+" => Positive,
             _ => Unsigned,
@@ -192,7 +193,7 @@ fn base<L: Span, E: Clone>(source: &str, location: L) -> ParseResult<Base, L, E>
                 .or('X'),
         )
         .maybe()
-        .map(|s: String| match s.as_str() {
+        .map(|s| match s.to_string().as_str() {
             "0d" | "0D" => Decimal,
             "0b" | "0B" => Binary,
             "0o" | "0O" => Octal,
@@ -349,12 +350,13 @@ pub fn string_literal<L: Span, E: Clone>(source: &str, location: L) -> ParseResu
     character('"')
         .skip(
             any_character
-                .condition(|c: &String| !c.chars().any(|c| c == '"'))
+                .condition(|c| !c.clone().any(|c| *c == '"'))
                 .or(character('\\').and('"'))
                 .multiple()
                 .maybe(),
         )
         .drop('"')
+        .map(|s| s.to_string())
         .parse(source, location)
 }
 
@@ -363,11 +365,11 @@ mod tests {
     use super::*;
     use crate::location::new_location;
 
-    fn sequence<L: Span, E: Clone>(source: &str, location: L) -> ParseResult<Vec<Token>, L, E> {
+    fn sequence<L: Span, E: Clone>(source: &str, location: L) -> ParseResult<List<Token>, L, E> {
         fn token_list<L: Span, E: Clone>(
             source: &str,
             location: L,
-        ) -> ParseResult<Vec<Token>, L, E> {
+        ) -> ParseResult<List<Token>, L, E> {
             token.drop(space).parse(source, location).map(&List::single)
         }
 

@@ -68,6 +68,7 @@ fn expression<L: Span>(source: &str, location: L) -> ParseResult<i32, L, EvalErr
                 .multiple()
                 .drop(space)
                 .end()
+                .map(|s| s.to_string())
                 .and_then(|text| error(1, InvalidExpression(text))),
         )
         .parse(source, location)
@@ -144,6 +145,7 @@ fn paren<L: Span>(source: &str, location: L) -> ParseResult<i32, L, EvalError> {
                 .condition(|c| !c.is_whitespace())
                 .map(List::single)
                 .multiple()
+                .map(|s| s.to_string())
                 .and_then(|text| error(1, InvalidLiteral(text))),
         )
         .parse(source, location)
@@ -153,10 +155,11 @@ fn literal<L: Span>(source: &str, location: L) -> ParseResult<i32, L, EvalError>
     character('-')
         .maybe()
         .and(digit.multiple())
+        .map(|s| s.to_string())
         .map(|number| number.parse().unwrap())
         .parse(source, location)
 }
 
-fn operator<L: Span>(token: &'static str) -> impl Parser<String, L, EvalError> {
+fn operator<L: Span>(token: &'static str) -> impl Parser<List<char>, L, EvalError> {
     space.maybe().and(exact(token)).and(space.maybe())
 }

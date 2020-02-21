@@ -1,4 +1,5 @@
 use crate::location::{Meta, Span};
+use std::rc::Rc;
 
 pub fn parse<'s, T, L, E, P>(parser: &P, source: &'s str, location: L) -> ParseResult<'s, T, L, E>
 where
@@ -221,50 +222,105 @@ fn unfold<'s, T, L: Span, E: Clone>(
     }
 }
 
-pub trait List: Sized {
-    type Item;
+/// Persistent linked-list data structure
+#[derive(Debug)]
+pub struct List<T>(Rc<Node<T>>, usize);
 
-    fn new() -> Self;
+impl<T> List<T> {
+    /// Create a new, empty list
+    pub fn new() -> Self {
+        List(Rc::new(Node::Tail), 0)
+    }
 
-    fn push(&mut self, item: Self::Item);
+    pub fn single(value: T) -> Self {
+        Self::new().push(value)
+    }
 
-    fn concat(&mut self, other: &mut Self);
+    pub fn length(&self) -> usize {
+        self.1
+    }
 
-    fn single(item: Self::Item) -> Self {
-        let mut list = Self::new();
-        list.push(item);
-        list
+    /// Push an item onto the list
+    pub fn push(&self, value: T) -> Self {
+        let List(node, length) = self;
+        let node = Node::Node(Rc::new(value), node.clone());
+        List(Rc::new(node), *length + 1)
+    }
+
+    pub fn push_rc(&self, value: Rc<T>) -> Self {
+        let List(node, length) = self;
+        let node = Node::Node(value, node.clone());
+        List(Rc::new(node), *length + 1)
+    }
+
+    /// Create the reversed copy of the list
+    pub fn reverse(&self) -> Self {
+        let mut reversed = List::new();
+        for node in self.clone() {
+            reversed = reversed.push_rc(node);
+        }
+        return reversed;
+    }
+
+    /// Concatenate two lists
+    pub fn concat(&self, other: &Self) -> Self {
+        let mut joined = self.clone();
+        for node in other.reverse() {
+            joined = joined.push_rc(node);
+        }
+        joined
     }
 }
 
-impl List for String {
-    type Item = char;
-
-    fn new() -> Self {
-        String::new()
-    }
-
-    fn push(&mut self, item: char) {
-        String::push(self, item)
-    }
-
-    fn concat(&mut self, other: &mut Self) {
-        self.push_str(other)
+impl<T> Clone for List<T> {
+    fn clone(&self) -> Self {
+        List(self.0.clone(), self.1)
     }
 }
 
-impl<T> List for Vec<T> {
-    type Item = T;
-
-    fn new() -> Self {
-        Vec::new()
+impl ToString for List<char> {
+    fn to_string(&self) -> String {
+        let mut string = String::with_capacity(self.1);
+        for character in self.reverse() {
+            string.push(*character);
+        }
+        string
     }
+}
 
-    fn push(&mut self, item: T) {
-        Vec::push(self, item)
+impl<T> Iterator for List<T> {
+    type Item = Rc<T>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some((next, tail)) = self.0.pair() {
+            *self = List(tail, self.1 - 1);
+            Some(next)
+        } else {
+            None
+        }
     }
+}
 
-    fn concat(&mut self, other: &mut Self) {
-        self.append(other)
+#[derive(Debug)]
+enum Node<T> {
+    Node(Rc<T>, Rc<Node<T>>),
+    Tail,
+}
+
+impl<T> Node<T> {
+    fn pair(&self) -> Option<(Rc<T>, Rc<Node<T>>)> {
+        match self {
+            Node::Node(value, next) => Some((value.clone(), next.clone())),
+            Node::Tail => None,
+        }
+    }
+}
+
+impl<T> Clone for Node<T> {
+    fn clone(&self) -> Self {
+        match self {
+            Node::Node(value, next) => Node::Node(value.clone(), next.clone()),
+            Node::Tail => Node::Tail,
+        }
     }
 }

@@ -79,17 +79,13 @@ impl<'p, T: 'p, L: 'p, E: 'p, P: Parser<T, L, E> + 'p> BoxedParserExt<'p, T, L, 
 
 pub struct Multiple<P>(P);
 
-impl<T: List + Clone, L: Span, E: Clone, P: Parser<T, L, E>> Parser<T, L, E> for Multiple<P> {
-    fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, T, L, E> {
+impl<T, L: Span, E: Clone, P: Parser<List<T>, L, E>> Parser<List<T>, L, E> for Multiple<P> {
+    fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, List<T>, L, E> {
         self.0
             .parse(source, location)
             .and_then(&|parsed, source, mut location| {
                 self.parse(source, location.take())
-                    .map(&|mut tail| {
-                        let mut parsed = parsed.clone();
-                        parsed.concat(&mut tail);
-                        parsed
-                    })
+                    .map(&|mut tail| parsed.concat(&mut tail))
                     .or(ParseResult::success(parsed, source, location))
             })
     }
@@ -97,8 +93,8 @@ impl<T: List + Clone, L: Span, E: Clone, P: Parser<T, L, E>> Parser<T, L, E> for
 
 pub struct Maybe<P>(P);
 
-impl<T: List + Clone, L: Span, E, P: Parser<T, L, E>> Parser<T, L, E> for Maybe<P> {
-    fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, T, L, E> {
+impl<T, L: Span, E, P: Parser<List<T>, L, E>> Parser<List<T>, L, E> for Maybe<P> {
+    fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, List<T>, L, E> {
         self.0
             .parse(source, location.clone())
             .or(empty(source, location))
@@ -155,20 +151,18 @@ where
 
 pub struct And<A, B>(A, B);
 
-impl<A, B, T: List + Clone, L: Span, E: Clone> Parser<T, L, E> for And<A, B>
+impl<A, B, T, L: Span, E: Clone> Parser<List<T>, L, E> for And<A, B>
 where
-    A: Parser<T, L, E>,
-    B: Parser<T, L, E>,
+    A: Parser<List<T>, L, E>,
+    B: Parser<List<T>, L, E>,
 {
-    fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, T, L, E> {
+    fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, List<T>, L, E> {
         self.0
             .parse(source, location)
             .and_then(&|prefix, source, location| {
-                self.1.parse(source, location).map(&|mut suffix| {
-                    let mut token = prefix.clone();
-                    token.concat(&mut suffix);
-                    token
-                })
+                self.1
+                    .parse(source, location)
+                    .map(&|suffix| prefix.clone().concat(&suffix))
             })
     }
 }

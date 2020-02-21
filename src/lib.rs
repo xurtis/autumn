@@ -19,11 +19,11 @@ mod tests {
 
     const VALID_TOKENS: &'static [&'static str] = &["A", "ABC", "ABC123", "_ABC123"];
 
-    fn token_prefix<L: Span>(source: &str, location: L) -> ParseResult<String, L> {
+    fn token_prefix<L: Span>(source: &str, location: L) -> ParseResult<List<char>, L> {
         alphabetic.or(character('_')).parse(source, location)
     }
 
-    fn token_suffix<L: Span>(source: &str, location: L) -> ParseResult<String, L> {
+    fn token_suffix<L: Span>(source: &str, location: L) -> ParseResult<List<char>, L> {
         alphabetic
             .or(digit)
             .or(character('_'))
@@ -33,10 +33,11 @@ mod tests {
     fn token<L: Span>(source: &str, location: L) -> ParseResult<String, L> {
         token_prefix
             .and(token_suffix.multiple().maybe())
+            .map(|s| s.to_string())
             .parse(source, location)
     }
 
-    fn space<L: Span>(source: &str, location: L) -> ParseResult<String, L> {
+    fn space<L: Span>(source: &str, location: L) -> ParseResult<List<char>, L> {
         whitespace
             .and(whitespace.multiple().maybe())
             .parse(source, location)
@@ -57,8 +58,8 @@ mod tests {
     const VALID_SEQUENCES: &'static [&'static str] =
         &["The quick brown fox", "jumped over the lazy dog"];
 
-    fn sequence<L: Span>(source: &str, location: L) -> ParseResult<Vec<String>, L> {
-        fn token_list<L: Span>(source: &str, location: L) -> ParseResult<Vec<String>, L> {
+    fn sequence<L: Span>(source: &str, location: L) -> ParseResult<List<String>, L> {
+        fn token_list<L: Span>(source: &str, location: L) -> ParseResult<List<String>, L> {
             token(source, location).map(&List::single)
         }
 
@@ -100,68 +101,67 @@ mod tests {
         Integer(i32),
         Float(f32),
         String(String),
-        List(Vec<Meta<SExpression<L>, L>>),
+        List(List<Meta<SExpression<L>, L>>),
     }
 
-    fn expr_space<L: Span>(source: &str, location: L) -> ParseResult<String, L> {
+    fn expr_space<L: Span>(source: &str, location: L) -> ParseResult<List<char>, L> {
         whitespace.multiple().parse(source, location)
     }
 
-    fn atom_prefix<L: Span>() -> impl Parser<String, L> {
+    fn atom_prefix<L: Span>() -> impl Parser<List<char>, L> {
         alphabetic.or(character('_').or(character('-')))
     }
 
-    fn atom_char<L: Span>() -> impl Parser<String, L> {
+    fn atom_char<L: Span>() -> impl Parser<List<char>, L> {
         atom_prefix().or(digit)
     }
 
     fn atom<L: Span>(source: &str, location: L) -> ParseResult<SExpression<L>, L> {
         atom_prefix()
             .and(atom_char().multiple().maybe())
+            .map(|s| s.to_string())
+            .map(SExpression::Atom)
             .parse(source, location)
-            .map(&SExpression::Atom)
     }
 
     fn integer<L: Span>(source: &str, location: L) -> ParseResult<SExpression<L>, L> {
         digit
             .multiple()
+            .map(|i| i.to_string().parse().unwrap())
+            .map(SExpression::Integer)
             .parse(source, location)
-            .map(&|i| i.parse().unwrap())
-            .map(&SExpression::Integer)
     }
 
     fn float<L: Span>(source: &str, location: L) -> ParseResult<SExpression<L>, L> {
         digit
             .multiple()
             .and(character('.').and(digit.multiple().maybe()))
+            .map(|i| i.to_string().parse().unwrap())
+            .map(SExpression::Float)
             .parse(source, location)
-            .map(&|i| i.parse().unwrap())
-            .map(&SExpression::Float)
     }
 
     fn string<L: Span>(source: &str, location: L) -> ParseResult<SExpression<L>, L> {
         character('"')
             .skip(
                 any_character
-                    .condition(&|c: &String| c != "\"")
+                    .condition(|c| c.clone().all(|c| *c != '\"'))
                     .or(character('\\').and(character('"')))
                     .multiple()
                     .maybe()
                     .drop(character('"')),
             )
+            .map(|s| s.to_string())
+            .map(SExpression::String)
             .parse(source, location)
-            .map(&SExpression::String)
     }
 
     fn list<L: Span>(source: &str, location: L) -> ParseResult<SExpression<L>, L> {
         fn expression_list<L: Span>(
             source: &str,
             location: L,
-        ) -> ParseResult<Vec<Meta<SExpression<L>, L>>, L> {
-            sexpression
-                .meta()
-                .parse(source, location)
-                .map(&List::single)
+        ) -> ParseResult<List<Meta<SExpression<L>, L>>, L> {
+            sexpression.meta().map(List::single).parse(source, location)
         }
 
         character('(')
@@ -173,8 +173,9 @@ mod tests {
                     .maybe()
                     .drop(expr_space.maybe().and(character(')'))),
             )
+            .map(|l| l.reverse())
+            .map(SExpression::List)
             .parse(source, location)
-            .map(&SExpression::List)
     }
 
     fn sexpression<L: Span>(source: &str, location: L) -> ParseResult<SExpression<L>, L> {
