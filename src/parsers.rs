@@ -269,7 +269,6 @@ pub fn empty<T, L: Span, E>(source: &str, location: L) -> ParseResult<List<T>, L
     ParseResult::success(List::new(), source, location)
 }
 
-
 /// Converts a parser-like closure into an actual parser
 ///
 /// Although the Rust compiler will quite happily accept any function with the appropriate
@@ -356,7 +355,6 @@ pub fn digit<L: Span, E>(source: &str, location: L) -> ParseResult<List<char>, L
     char_condition(&|c| c.is_ascii_digit(), source, location)
 }
 
-
 /// Parses a single ASCII alphabetic character from the input
 ///
 /// See [specifying characters](index.html#specifying-characters).
@@ -364,14 +362,12 @@ pub fn alphabetic<L: Span, E>(source: &str, location: L) -> ParseResult<List<cha
     char_condition(&|c| c.is_ascii_alphabetic(), source, location)
 }
 
-
 /// Parses a single ASCII alphabetic or digit character from the input
 ///
 /// See [specifying characters](index.html#specifying-characters).
 pub fn alphanumeric<L: Span, E>(source: &str, location: L) -> ParseResult<List<char>, L, E> {
     char_condition(&|c| c.is_ascii_alphanumeric(), source, location)
 }
-
 
 /// Parses a single Unicode whitespace character from the input
 ///
