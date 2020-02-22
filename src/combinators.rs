@@ -7,20 +7,8 @@ use std::marker::PhantomData;
 
 /// Combinator extensions to parsers
 pub trait ParserExt<T, L, E>: Parser<T, L, E> + Sized {
-    fn multiple(self) -> Multiple<Self, L, E> {
-        Multiple(self, PhantomData)
-    }
-
-    fn maybe(self) -> Maybe<Self, L, E> {
-        Maybe(self, PhantomData)
-    }
-
     fn or<P: Parser<T, L, E>>(self, other: P) -> Or<Self, P, L, E> {
         Or(self, other, PhantomData)
-    }
-
-    fn and<P: Parser<T, L, E>>(self, other: P) -> And<Self, P, L, E> {
-        And(self, other, PhantomData)
     }
 
     fn map<V, F: Fn(T) -> V>(self, map: F) -> Map<Self, F, T, L, E> {
@@ -72,6 +60,22 @@ pub trait ParserExt<T, L, E>: Parser<T, L, E> + Sized {
 }
 
 impl<T, L, E, P: Parser<T, L, E>> ParserExt<T, L, E> for P {}
+
+pub trait ListParserExt<T, L, E>: Parser<List<T>, L, E> + Sized {
+    fn multiple(self) -> Multiple<Self, L, E> {
+        Multiple(self, PhantomData)
+    }
+
+    fn maybe(self) -> Maybe<Self, L, E> {
+        Maybe(self, PhantomData)
+    }
+
+    fn and<P: Parser<List<T>, L, E>>(self, other: P) -> And<Self, P, L, E> {
+        And(self, other, PhantomData)
+    }
+}
+
+impl<T, L, E, P: Parser<List<T>, L, E>> ListParserExt<T, L, E> for P {}
 
 pub trait BoxedParserExt<'p, T, L, E>: Parser<T, L, E> + Sized + 'p {
     fn boxed(self) -> Boxed<dyn Parser<T, L, E> + 'p> {

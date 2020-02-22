@@ -1,6 +1,6 @@
 //! Basic general-purpose parsers
 
-use crate::combinators::{Boxed, BoxedParserExt, ParserExt};
+use crate::combinators::{Boxed, BoxedParserExt, ListParserExt, ParserExt};
 use crate::location::Span;
 use crate::{List, ParseResult, Parser};
 
