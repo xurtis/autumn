@@ -84,17 +84,17 @@ fn char_condition<'s, L: Span, E>(
         .parse(source, location)
 }
 
-impl<L: Span, E> Parser<List<char>, L, E> for char {
-    fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, List<char>, L, E> {
+impl<L: Span, E> Parser<char, L, E> for char {
+    fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, char, L, E> {
         let character = *self;
-        any_character
-            .condition(move |c| c.clone().all(move |c| *c == character))
+        single_character
+            .condition(move |c| *c == character)
             .parse(source, location)
     }
 }
 
-impl<L: Span, E> Parser<List<char>, L, E> for &char {
-    fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, List<char>, L, E> {
+impl<L: Span, E> Parser<char, L, E> for &char {
+    fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, char, L, E> {
         (*self).parse(source, location)
     }
 }
@@ -126,7 +126,8 @@ fn exact_rec<'s, L: Span, E>(
 ) -> ParseResult<'s, List<char>, L, E> {
     if let Some(next) = exact.chars().next() {
         let remaining = &exact[next.len_utf8()..];
-        next.parse(source, location)
+        next.map(List::single)
+            .parse(source, location)
             .and_then(&|parsed, source, location| {
                 exact_rec::<_, E>(remaining, source, location)
                     .map(&|remaining| parsed.concat(&remaining))

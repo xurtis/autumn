@@ -74,7 +74,7 @@ fn expr_space<L: Span>(source: &str, location: L) -> ParseResult<List<char>, L> 
 }
 
 fn atom_prefix<L: Span>() -> impl Parser<List<char>, L> {
-    alphabetic.or('_'.or('-'))
+    alphabetic.or("_".or("-"))
 }
 
 fn atom_char<L: Span>() -> impl Parser<List<char>, L> {
@@ -100,20 +100,20 @@ fn integer<L: Span>(source: &str, location: L) -> ParseResult<SExpression<L>, L>
 fn float<L: Span>(source: &str, location: L) -> ParseResult<SExpression<L>, L> {
     digit
         .multiple()
-        .and('.'.and(digit.multiple().maybe()))
+        .and(".".and(digit.multiple().maybe()))
         .map(|i| FromStr::from_str(&i.to_string()).unwrap())
         .map(SExpression::Float)
         .parse(source, location)
 }
 
 fn string<L: Span>(source: &str, location: L) -> ParseResult<SExpression<L>, L> {
-    '"'.skip(
+    "\"".skip(
         any_character
             .condition(|c| c.clone().all(|c| *c != '\"'))
-            .or('\\'.and('"'))
+            .or("\\".and("\""))
             .multiple()
             .maybe()
-            .drop('"'),
+            .drop("\""),
     )
     .map(|s| s.to_string())
     .map(SExpression::String)
@@ -128,13 +128,13 @@ fn list<L: Span>(source: &str, location: L) -> ParseResult<SExpression<L>, L> {
         sexpression.meta().map(List::single).parse(source, location)
     }
 
-    '('.and(expr_space.maybe())
+    "(".and(expr_space.maybe())
         .skip(
             expression_list
                 .and(expr_space.skip(expression_list).multiple().maybe())
                 .drop(expr_space.maybe())
                 .maybe()
-                .drop(expr_space.maybe().and(')')),
+                .drop(expr_space.maybe().and(")")),
         )
         .map(|l| l.reverse())
         .map(SExpression::List)

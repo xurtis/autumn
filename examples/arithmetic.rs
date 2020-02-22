@@ -138,9 +138,9 @@ fn rem<L: Span>(source: &str, location: L) -> ParseResult<i32, L, EvalError> {
 }
 
 fn paren<L: Span>(source: &str, location: L) -> ParseResult<i32, L, EvalError> {
-    '('.and(space.maybe())
+    "(".and(space.maybe())
         .and_then(|_| add)
-        .drop(space.maybe().and(')'))
+        .drop(space.maybe().and(")"))
         .or(literal)
         .on_none(
             single_character
@@ -155,7 +155,7 @@ fn paren<L: Span>(source: &str, location: L) -> ParseResult<i32, L, EvalError> {
 }
 
 fn literal<L: Span>(source: &str, location: L) -> ParseResult<i32, L, EvalError> {
-    '-'.maybe()
+    "-".maybe()
         .and(digit.multiple())
         .map(|s| s.to_string())
         .map(|number| FromStr::from_str(&number).unwrap())
