@@ -37,15 +37,15 @@ fn main() -> Result<()> {
 }
 
 #[derive(Debug, Clone)]
-enum SExpression<L> {
+enum SExpression {
     Atom(String),
     Integer(i32),
     Float(f32),
     String(String),
-    List(List<Meta<SExpression<L>, L>>),
+    List(List<Meta<SExpression, Span>>),
 }
 
-impl<L: fmt::Display> fmt::Display for SExpression<L> {
+impl fmt::Display for SExpression {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use SExpression::*;
         match self {
@@ -69,19 +69,19 @@ impl<L: fmt::Display> fmt::Display for SExpression<L> {
     }
 }
 
-fn expr_space<L: Span>(source: &str, location: L) -> ParseResult<List<char>, L> {
+fn expr_space(source: &str, location: Span) -> ParseResult<List<char>> {
     whitespace.multiple().parse(source, location)
 }
 
-fn atom_prefix<L: Span>() -> impl Parser<List<char>, L> {
+fn atom_prefix() -> impl Parser<List<char>> {
     alphabetic.or("_".or("-"))
 }
 
-fn atom_char<L: Span>() -> impl Parser<List<char>, L> {
+fn atom_char() -> impl Parser<List<char>> {
     atom_prefix().or(digit)
 }
 
-fn atom<L: Span>(source: &str, location: L) -> ParseResult<SExpression<L>, L> {
+fn atom(source: &str, location: Span) -> ParseResult<SExpression> {
     atom_prefix()
         .and(atom_char().multiple().maybe())
         .map(|s| s.to_string())
@@ -89,7 +89,7 @@ fn atom<L: Span>(source: &str, location: L) -> ParseResult<SExpression<L>, L> {
         .parse(source, location)
 }
 
-fn integer<L: Span>(source: &str, location: L) -> ParseResult<SExpression<L>, L> {
+fn integer(source: &str, location: Span) -> ParseResult<SExpression> {
     digit
         .multiple()
         .map(|i| FromStr::from_str(&i.to_string()).unwrap())
@@ -97,7 +97,7 @@ fn integer<L: Span>(source: &str, location: L) -> ParseResult<SExpression<L>, L>
         .parse(source, location)
 }
 
-fn float<L: Span>(source: &str, location: L) -> ParseResult<SExpression<L>, L> {
+fn float(source: &str, location: Span) -> ParseResult<SExpression> {
     digit
         .multiple()
         .and(".".and(digit.multiple().maybe()))
@@ -106,7 +106,7 @@ fn float<L: Span>(source: &str, location: L) -> ParseResult<SExpression<L>, L> {
         .parse(source, location)
 }
 
-fn string<L: Span>(source: &str, location: L) -> ParseResult<SExpression<L>, L> {
+fn string(source: &str, location: Span) -> ParseResult<SExpression> {
     "\"".skip(
         any_character
             .condition(|c| c.clone().all(|c| *c != '\"'))
@@ -120,11 +120,11 @@ fn string<L: Span>(source: &str, location: L) -> ParseResult<SExpression<L>, L> 
     .parse(source, location)
 }
 
-fn list<L: Span>(source: &str, location: L) -> ParseResult<SExpression<L>, L> {
-    fn expression_list<L: Span>(
+fn list(source: &str, location: Span) -> ParseResult<SExpression> {
+    fn expression_list(
         source: &str,
-        location: L,
-    ) -> ParseResult<List<Meta<SExpression<L>, L>>, L> {
+        location: Span,
+    ) -> ParseResult<List<Meta<SExpression, Span>>> {
         sexpression.meta().map(List::single).parse(source, location)
     }
 
@@ -141,7 +141,7 @@ fn list<L: Span>(source: &str, location: L) -> ParseResult<SExpression<L>, L> {
         .parse(source, location)
 }
 
-fn sexpression<L: Span>(source: &str, location: L) -> ParseResult<SExpression<L>, L> {
+fn sexpression(source: &str, location: Span) -> ParseResult<SExpression> {
     list.or(atom)
         .or(string)
         .or(float)

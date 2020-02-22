@@ -245,7 +245,7 @@ impl<'s, T, E> InnerResult<'s, T, E> {
         self.exceptions.length() > 0 || self.errors.length() > 0
     }
 
-    fn map<A, F: Fn(T) -> A>(self, map: F) -> InnerResult<'s, A, Span, E> {
+    fn map<A, F: Fn(T) -> A>(self, map: F) -> InnerResult<'s, A, E> {
         let InnerResult {
             value,
             exceptions,
@@ -284,7 +284,7 @@ impl<'s, T, E> InnerResult<'s, T, E> {
 }
 
 impl<'s, T, E> InnerResult<'s, T, E> {
-    fn meta(self) -> InnerResult<'s, Meta<T, Span>, Span, E> {
+    fn meta(self) -> InnerResult<'s, Meta<T, Span>, E> {
         let InnerResult {
             value,
             exceptions,

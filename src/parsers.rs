@@ -294,7 +294,7 @@ pub fn empty<T, E>(source: &str, location: Span) -> ParseResult<List<T>, E> {
 /// ```
 pub fn closure<F, T, E>(function: F) -> impl Parser<T, E>
 where
-    F: for<'s> Fn(&'s str) -> ParseResult<'s, T, E>,
+    F: for<'s> Fn(&'s str, Span) -> ParseResult<'s, T, E>,
 {
     function
 }
@@ -393,7 +393,7 @@ fn exact_rec<'s, E>(
         next.map(List::single)
             .parse(source, location)
             .and_then(&|parsed, source, location| {
-                exact_rec::<_, E>(remaining, source, location)
+                exact_rec::<E>(remaining, source, location)
                     .map(&|remaining| parsed.concat(&remaining))
             })
     } else {

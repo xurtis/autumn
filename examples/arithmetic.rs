@@ -58,7 +58,7 @@ impl fmt::Display for EvalError {
     }
 }
 
-fn expression<L: Span>(source: &str, location: L) -> ParseResult<i32, L, EvalError> {
+fn expression(source: &str, location: Span) -> ParseResult<i32, EvalError> {
     space
         .maybe()
         .skip(add.drop(space.maybe()))
@@ -75,7 +75,7 @@ fn expression<L: Span>(source: &str, location: L) -> ParseResult<i32, L, EvalErr
         .parse(source, location)
 }
 
-fn add<L: Span>(source: &str, location: L) -> ParseResult<i32, L, EvalError> {
+fn add(source: &str, location: Span) -> ParseResult<i32, EvalError> {
     sub.and_then(|left| {
         operator("+")
             .skip(add.map(move |right| left + right))
@@ -84,7 +84,7 @@ fn add<L: Span>(source: &str, location: L) -> ParseResult<i32, L, EvalError> {
     .parse(source, location)
 }
 
-fn sub<L: Span>(source: &str, location: L) -> ParseResult<i32, L, EvalError> {
+fn sub(source: &str, location: Span) -> ParseResult<i32, EvalError> {
     mul.and_then(|left| {
         operator("-")
             .skip(sub.map(move |right| left - right))
@@ -93,7 +93,7 @@ fn sub<L: Span>(source: &str, location: L) -> ParseResult<i32, L, EvalError> {
     .parse(source, location)
 }
 
-fn mul<L: Span>(source: &str, location: L) -> ParseResult<i32, L, EvalError> {
+fn mul(source: &str, location: Span) -> ParseResult<i32, EvalError> {
     div.and_then(|left| {
         operator("*")
             .skip(mul.map(move |right| left * right))
@@ -102,7 +102,7 @@ fn mul<L: Span>(source: &str, location: L) -> ParseResult<i32, L, EvalError> {
     .parse(source, location)
 }
 
-fn div<L: Span>(source: &str, location: L) -> ParseResult<i32, L, EvalError> {
+fn div(source: &str, location: Span) -> ParseResult<i32, EvalError> {
     rem.and_then(&|left| {
         operator("/")
             .skip(div.map(move |right| (left, right)))
@@ -119,7 +119,7 @@ fn div<L: Span>(source: &str, location: L) -> ParseResult<i32, L, EvalError> {
     .parse(source, location)
 }
 
-fn rem<L: Span>(source: &str, location: L) -> ParseResult<i32, L, EvalError> {
+fn rem(source: &str, location: Span) -> ParseResult<i32, EvalError> {
     paren
         .and_then(&|left| {
             operator("%")
@@ -137,7 +137,7 @@ fn rem<L: Span>(source: &str, location: L) -> ParseResult<i32, L, EvalError> {
         .parse(source, location)
 }
 
-fn paren<L: Span>(source: &str, location: L) -> ParseResult<i32, L, EvalError> {
+fn paren(source: &str, location: Span) -> ParseResult<i32, EvalError> {
     "(".and(space.maybe())
         .and_then(|_| add)
         .drop(space.maybe().and(")"))
@@ -154,7 +154,7 @@ fn paren<L: Span>(source: &str, location: L) -> ParseResult<i32, L, EvalError> {
         .parse(source, location)
 }
 
-fn literal<L: Span>(source: &str, location: L) -> ParseResult<i32, L, EvalError> {
+fn literal(source: &str, location: Span) -> ParseResult<i32, EvalError> {
     "-".maybe()
         .and(digit.multiple())
         .map(|s| s.to_string())
@@ -162,6 +162,6 @@ fn literal<L: Span>(source: &str, location: L) -> ParseResult<i32, L, EvalError>
         .parse(source, location)
 }
 
-fn operator<L: Span>(token: &'static str) -> impl Parser<List<char>, L, EvalError> {
+fn operator(token: &'static str) -> impl Parser<List<char>, EvalError> {
     space.maybe().and(token).and(space.maybe())
 }
