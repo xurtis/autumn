@@ -4,6 +4,7 @@ use autumn::prelude::*;
 
 use std::fmt;
 use std::io::{stdin, stdout, BufRead, BufReader, Write};
+use std::str::FromStr;
 
 type Error = Box<dyn ::std::error::Error>;
 type Result<T> = ::std::result::Result<T, Error>;
@@ -137,10 +138,9 @@ fn rem<L: Span>(source: &str, location: L) -> ParseResult<i32, L, EvalError> {
 }
 
 fn paren<L: Span>(source: &str, location: L) -> ParseResult<i32, L, EvalError> {
-    character('(')
-        .and(space.maybe())
+    '('.and(space.maybe())
         .and_then(|_| add)
-        .drop(space.maybe().and(character(')')))
+        .drop(space.maybe().and(')'))
         .or(literal)
         .on_none(
             single_character
@@ -155,14 +155,13 @@ fn paren<L: Span>(source: &str, location: L) -> ParseResult<i32, L, EvalError> {
 }
 
 fn literal<L: Span>(source: &str, location: L) -> ParseResult<i32, L, EvalError> {
-    character('-')
-        .maybe()
+    '-'.maybe()
         .and(digit.multiple())
         .map(|s| s.to_string())
-        .map(|number| number.parse().unwrap())
+        .map(|number| FromStr::from_str(&number).unwrap())
         .parse(source, location)
 }
 
 fn operator<L: Span>(token: &'static str) -> impl Parser<List<char>, L, EvalError> {
-    space.maybe().and(exact(token)).and(space.maybe())
+    space.maybe().and(token).and(space.maybe())
 }

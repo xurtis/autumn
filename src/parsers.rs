@@ -93,8 +93,10 @@ impl<L: Span, E> Parser<List<char>, L, E> for char {
     }
 }
 
-pub fn character<L: Span, E>(character: char) -> impl Parser<List<char>, L, E> {
-    any_character.condition(move |c| c.clone().all(move |c| *c == character))
+impl<L: Span, E> Parser<List<char>, L, E> for &char {
+    fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, List<char>, L, E> {
+        (*self).parse(source, location)
+    }
 }
 
 pub fn digit<L: Span, E>(source: &str, location: L) -> ParseResult<List<char>, L, E> {
@@ -117,21 +119,37 @@ pub fn space<L: Span, E>(source: &str, location: L) -> ParseResult<List<char>, L
     whitespace.multiple().parse(source, location)
 }
 
-pub fn exact<L: Span, E>(must_match: &'static str) -> impl Parser<List<char>, L, E> {
-    closure::<_, _, _, E>(move |source, location| {
-        if let Some(next) = must_match.chars().next() {
-            let remaining = &must_match[next.len_utf8()..];
-            character::<_, E>(next)
-                .and(exact::<_, E>(remaining))
-                .parse(source, location)
-        } else {
-            empty.parse(source, location)
-        }
-    })
+fn exact_rec<'s, L: Span, E>(
+    exact: &str,
+    source: &'s str,
+    location: L,
+) -> ParseResult<'s, List<char>, L, E> {
+    if let Some(next) = exact.chars().next() {
+        let remaining = &exact[next.len_utf8()..];
+        next.parse(source, location)
+            .and_then(&|parsed, source, location| {
+                exact_rec::<_, E>(remaining, source, location)
+                    .map(&|remaining| parsed.concat(&remaining))
+            })
+    } else {
+        empty.parse(source, location)
+    }
 }
 
-impl<L: Span, E> Parser<List<char>, L, E> for &'static str {
+impl<L: Span, E> Parser<List<char>, L, E> for str {
     fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, List<char>, L, E> {
-        exact(self).parse(source, location)
+        exact_rec(self, source, location)
+    }
+}
+
+impl<L: Span, E> Parser<List<char>, L, E> for &str {
+    fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, List<char>, L, E> {
+        exact_rec(self, source, location)
+    }
+}
+
+impl<L: Span, E> Parser<List<char>, L, E> for String {
+    fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, List<char>, L, E> {
+        exact_rec(self, source, location)
     }
 }

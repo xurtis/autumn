@@ -2,8 +2,9 @@
 
 use autumn::prelude::*;
 
-use std::io::{stdin, stdout, BufRead, BufReader, Write};
 use std::fmt;
+use std::io::{stdin, stdout, BufRead, BufReader, Write};
+use std::str::FromStr;
 
 type Error = Box<dyn ::std::error::Error>;
 type Result<T> = ::std::result::Result<T, Error>;
@@ -68,13 +69,12 @@ impl<L: fmt::Display> fmt::Display for SExpression<L> {
     }
 }
 
-
 fn expr_space<L: Span>(source: &str, location: L) -> ParseResult<List<char>, L> {
     whitespace.multiple().parse(source, location)
 }
 
 fn atom_prefix<L: Span>() -> impl Parser<List<char>, L> {
-    alphabetic.or(character('_').or(character('-')))
+    alphabetic.or('_'.or('-'))
 }
 
 fn atom_char<L: Span>() -> impl Parser<List<char>, L> {
@@ -92,7 +92,7 @@ fn atom<L: Span>(source: &str, location: L) -> ParseResult<SExpression<L>, L> {
 fn integer<L: Span>(source: &str, location: L) -> ParseResult<SExpression<L>, L> {
     digit
         .multiple()
-        .map(|i| i.to_string().parse().unwrap())
+        .map(|i| FromStr::from_str(&i.to_string()).unwrap())
         .map(SExpression::Integer)
         .parse(source, location)
 }
@@ -100,25 +100,24 @@ fn integer<L: Span>(source: &str, location: L) -> ParseResult<SExpression<L>, L>
 fn float<L: Span>(source: &str, location: L) -> ParseResult<SExpression<L>, L> {
     digit
         .multiple()
-        .and(character('.').and(digit.multiple().maybe()))
-        .map(|i| i.to_string().parse().unwrap())
+        .and('.'.and(digit.multiple().maybe()))
+        .map(|i| FromStr::from_str(&i.to_string()).unwrap())
         .map(SExpression::Float)
         .parse(source, location)
 }
 
 fn string<L: Span>(source: &str, location: L) -> ParseResult<SExpression<L>, L> {
-    character('"')
-        .skip(
-            any_character
-                .condition(|c| c.clone().all(|c| *c != '\"'))
-                .or(character('\\').and(character('"')))
-                .multiple()
-                .maybe()
-                .drop(character('"')),
-        )
-        .map(|s| s.to_string())
-        .map(SExpression::String)
-        .parse(source, location)
+    '"'.skip(
+        any_character
+            .condition(|c| c.clone().all(|c| *c != '\"'))
+            .or('\\'.and('"'))
+            .multiple()
+            .maybe()
+            .drop('"'),
+    )
+    .map(|s| s.to_string())
+    .map(SExpression::String)
+    .parse(source, location)
 }
 
 fn list<L: Span>(source: &str, location: L) -> ParseResult<SExpression<L>, L> {
@@ -129,14 +128,13 @@ fn list<L: Span>(source: &str, location: L) -> ParseResult<SExpression<L>, L> {
         sexpression.meta().map(List::single).parse(source, location)
     }
 
-    character('(')
-        .and(expr_space.maybe())
+    '('.and(expr_space.maybe())
         .skip(
             expression_list
                 .and(expr_space.skip(expression_list).multiple().maybe())
                 .drop(expr_space.maybe())
                 .maybe()
-                .drop(expr_space.maybe().and(character(')'))),
+                .drop(expr_space.maybe().and(')')),
         )
         .map(|l| l.reverse())
         .map(SExpression::List)

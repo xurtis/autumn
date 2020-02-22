@@ -227,14 +227,11 @@ mod tests {
     const VALID_TOKENS: &'static [&'static str] = &["A", "ABC", "ABC123", "_ABC123"];
 
     fn token_prefix<L: Span>(source: &str, location: L) -> ParseResult<List<char>, L> {
-        alphabetic.or(character('_')).parse(source, location)
+        alphabetic.or('_').parse(source, location)
     }
 
     fn token_suffix<L: Span>(source: &str, location: L) -> ParseResult<List<char>, L> {
-        alphabetic
-            .or(digit)
-            .or(character('_'))
-            .parse(source, location)
+        alphabetic.or(digit).or('_').parse(source, location)
     }
 
     fn token<L: Span>(source: &str, location: L) -> ParseResult<String, L> {

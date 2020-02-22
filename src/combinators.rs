@@ -7,67 +7,67 @@ use std::marker::PhantomData;
 
 /// Combinator extensions to parsers
 pub trait ParserExt<T, L, E>: Parser<T, L, E> + Sized {
-    fn multiple(self) -> Multiple<Self> {
-        Multiple(self)
+    fn multiple(self) -> Multiple<Self, L, E> {
+        Multiple(self, PhantomData)
     }
 
-    fn maybe(self) -> Maybe<Self> {
-        Maybe(self)
+    fn maybe(self) -> Maybe<Self, L, E> {
+        Maybe(self, PhantomData)
     }
 
-    fn or<P: Parser<T, L, E>>(self, other: P) -> Or<Self, P> {
-        Or(self, other)
+    fn or<P: Parser<T, L, E>>(self, other: P) -> Or<Self, P, L, E> {
+        Or(self, other, PhantomData)
     }
 
-    fn and<P: Parser<T, L, E>>(self, other: P) -> And<Self, P> {
-        And(self, other)
+    fn and<P: Parser<T, L, E>>(self, other: P) -> And<Self, P, L, E> {
+        And(self, other, PhantomData)
     }
 
-    fn map<V, F: Fn(T) -> V>(self, map: F) -> Map<Self, F, T> {
+    fn map<V, F: Fn(T) -> V>(self, map: F) -> Map<Self, F, T, L, E> {
         Map(self, map, PhantomData)
     }
 
-    fn and_then<V, Q: Parser<V, L, E>, F: Fn(T) -> Q>(self, map: F) -> AndThen<Self, F, T> {
+    fn and_then<V, Q: Parser<V, L, E>, F: Fn(T) -> Q>(self, map: F) -> AndThen<Self, F, T, L, E> {
         AndThen(self, map, PhantomData)
     }
 
-    fn on_failure<P: Parser<T, L, E>>(self, other: P) -> OnFailure<Self, P> {
-        OnFailure(self, other)
+    fn on_failure<P: Parser<T, L, E>>(self, other: P) -> OnFailure<Self, P, L, E> {
+        OnFailure(self, other, PhantomData)
     }
 
-    fn on_none<P: Parser<T, L, E>>(self, other: P) -> OnNone<Self, P> {
-        OnNone(self, other)
+    fn on_none<P: Parser<T, L, E>>(self, other: P) -> OnNone<Self, P, L, E> {
+        OnNone(self, other, PhantomData)
     }
 
-    fn drop<V, P: Parser<V, L, E>>(self, other: P) -> Drop<Self, P, V> {
+    fn drop<V, P: Parser<V, L, E>>(self, other: P) -> Drop<Self, P, V, L, E> {
         Drop(self, other, PhantomData)
     }
 
-    fn skip<V, P: Parser<V, L, E>>(self, keep: P) -> Skip<Self, P, T> {
+    fn skip<V, P: Parser<V, L, E>>(self, keep: P) -> Skip<Self, P, T, L, E> {
         Skip(self, keep, PhantomData)
     }
 
-    fn matching<V>(self, compare: V) -> Matching<Self, V>
+    fn matching<V>(self, compare: V) -> Matching<Self, V, L, E>
     where
         T: PartialEq<V>,
     {
-        Matching(self, compare)
+        Matching(self, compare, PhantomData)
     }
 
-    fn condition<F: Fn(&T) -> bool>(self, condition: F) -> Condition<Self, F> {
-        Condition(self, condition)
+    fn condition<F: Fn(&T) -> bool>(self, condition: F) -> Condition<Self, F, L, E> {
+        Condition(self, condition, PhantomData)
     }
 
-    fn end(self) -> End<Self> {
-        End(self)
+    fn end(self) -> End<Self, L, E> {
+        End(self, PhantomData)
     }
 
-    fn catch(self) -> Catch<Self> {
-        Catch(self)
+    fn catch(self) -> Catch<Self, L, E> {
+        Catch(self, PhantomData)
     }
 
-    fn meta(self) -> MetaMap<Self> {
-        MetaMap(self)
+    fn meta(self) -> MetaMap<Self, L, E> {
+        MetaMap(self, PhantomData)
     }
 }
 
@@ -81,9 +81,9 @@ pub trait BoxedParserExt<'p, T, L, E>: Parser<T, L, E> + Sized + 'p {
 
 impl<'p, T: 'p, L: 'p, E: 'p, P: Parser<T, L, E> + 'p> BoxedParserExt<'p, T, L, E> for P {}
 
-pub struct Multiple<P>(P);
+pub struct Multiple<P, L, E>(P, PhantomData<(L, E)>);
 
-impl<T, L: Span, E, P: Parser<List<T>, L, E>> Parser<List<T>, L, E> for Multiple<P> {
+impl<T, L: Span, E, P: Parser<List<T>, L, E>> Parser<List<T>, L, E> for Multiple<P, L, E> {
     fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, List<T>, L, E> {
         self.0
             .parse(source, location)
@@ -95,9 +95,9 @@ impl<T, L: Span, E, P: Parser<List<T>, L, E>> Parser<List<T>, L, E> for Multiple
     }
 }
 
-pub struct Maybe<P>(P);
+pub struct Maybe<P, L, E>(P, PhantomData<(L, E)>);
 
-impl<T, L: Span, E, P: Parser<List<T>, L, E>> Parser<List<T>, L, E> for Maybe<P> {
+impl<T, L: Span, E, P: Parser<List<T>, L, E>> Parser<List<T>, L, E> for Maybe<P, L, E> {
     fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, List<T>, L, E> {
         self.0
             .parse(source, location.clone())
@@ -105,9 +105,11 @@ impl<T, L: Span, E, P: Parser<List<T>, L, E>> Parser<List<T>, L, E> for Maybe<P>
     }
 }
 
-pub struct Condition<P, F>(P, F);
+pub struct Condition<P, F, L, E>(P, F, PhantomData<(L, E)>);
 
-impl<T, L: Span, E, P: Parser<T, L, E>, F: Fn(&T) -> bool> Parser<T, L, E> for Condition<P, F> {
+impl<T, L: Span, E, P: Parser<T, L, E>, F: Fn(&T) -> bool> Parser<T, L, E>
+    for Condition<P, F, L, E>
+{
     fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, T, L, E> {
         self.0
             .parse(source, location)
@@ -121,9 +123,9 @@ impl<T, L: Span, E, P: Parser<T, L, E>, F: Fn(&T) -> bool> Parser<T, L, E> for C
     }
 }
 
-pub struct Matching<P, F>(P, F);
+pub struct Matching<P, F, L, E>(P, F, PhantomData<(L, E)>);
 
-impl<T: PartialEq<V>, V, E, L: Span, P: Parser<T, L, E>> Parser<T, L, E> for Matching<P, V> {
+impl<T: PartialEq<V>, V, E, L: Span, P: Parser<T, L, E>> Parser<T, L, E> for Matching<P, V, L, E> {
     fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, T, L, E> {
         self.0
             .parse(source, location)
@@ -137,9 +139,9 @@ impl<T: PartialEq<V>, V, E, L: Span, P: Parser<T, L, E>> Parser<T, L, E> for Mat
     }
 }
 
-pub struct Or<A, B>(A, B);
+pub struct Or<A, B, L, E>(A, B, PhantomData<(L, E)>);
 
-impl<A, B, T: Clone, L: Span, E> Parser<T, L, E> for Or<A, B>
+impl<A, B, T: Clone, L: Span, E> Parser<T, L, E> for Or<A, B, L, E>
 where
     A: Parser<T, L, E>,
     B: Parser<T, L, E>,
@@ -151,9 +153,9 @@ where
     }
 }
 
-pub struct And<A, B>(A, B);
+pub struct And<A, B, L, E>(A, B, PhantomData<(L, E)>);
 
-impl<A, B, T, L: Span, E> Parser<List<T>, L, E> for And<A, B>
+impl<A, B, T, L: Span, E> Parser<List<T>, L, E> for And<A, B, L, E>
 where
     A: Parser<List<T>, L, E>,
     B: Parser<List<T>, L, E>,
@@ -169,9 +171,9 @@ where
     }
 }
 
-pub struct Map<P, F, T>(P, F, PhantomData<T>);
+pub struct Map<P, F, T, L, E>(P, F, PhantomData<(T, L, E)>);
 
-impl<P, F, T, L: Span, E, V> Parser<V, L, E> for Map<P, F, T>
+impl<P, F, T, L: Span, E, V> Parser<V, L, E> for Map<P, F, T, L, E>
 where
     P: Parser<T, L, E>,
     F: Fn(T) -> V,
@@ -181,9 +183,9 @@ where
     }
 }
 
-pub struct AndThen<P, F, T>(P, F, PhantomData<T>);
+pub struct AndThen<P, F, T, L, E>(P, F, PhantomData<(T, L, E)>);
 
-impl<P, F, T, L: Span, E, Q, V> Parser<V, L, E> for AndThen<P, F, T>
+impl<P, F, T, L: Span, E, Q, V> Parser<V, L, E> for AndThen<P, F, T, L, E>
 where
     P: Parser<T, L, E>,
     Q: Parser<V, L, E>,
@@ -196,9 +198,9 @@ where
     }
 }
 
-pub struct OnFailure<A, B>(A, B);
+pub struct OnFailure<A, B, L, E>(A, B, PhantomData<(L, E)>);
 
-impl<A, B, T: Clone, L: Span, E> Parser<T, L, E> for OnFailure<A, B>
+impl<A, B, T: Clone, L: Span, E> Parser<T, L, E> for OnFailure<A, B, L, E>
 where
     A: Parser<T, L, E>,
     B: Parser<T, L, E>,
@@ -213,9 +215,9 @@ where
     }
 }
 
-pub struct OnNone<A, B>(A, B);
+pub struct OnNone<A, B, L, E>(A, B, PhantomData<(L, E)>);
 
-impl<A, B, T: Clone, L: Span, E> Parser<T, L, E> for OnNone<A, B>
+impl<A, B, T: Clone, L: Span, E> Parser<T, L, E> for OnNone<A, B, L, E>
 where
     A: Parser<T, L, E>,
     B: Parser<T, L, E>,
@@ -230,9 +232,9 @@ where
     }
 }
 
-pub struct Drop<A, B, V>(A, B, PhantomData<V>);
+pub struct Drop<A, B, V, L, E>(A, B, PhantomData<(V, L, E)>);
 
-impl<A, B, T: Clone, V, L: Span, E> Parser<T, L, E> for Drop<A, B, V>
+impl<A, B, T: Clone, V, L: Span, E> Parser<T, L, E> for Drop<A, B, V, L, E>
 where
     A: Parser<T, L, E>,
     B: Parser<V, L, E>,
@@ -246,9 +248,9 @@ where
     }
 }
 
-pub struct Skip<P, Q, T>(P, Q, PhantomData<T>);
+pub struct Skip<P, Q, T, L, E>(P, Q, PhantomData<(T, L, E)>);
 
-impl<P, Q, T, V, L: Span, E> Parser<V, L, E> for Skip<P, Q, T>
+impl<P, Q, T, V, L: Span, E> Parser<V, L, E> for Skip<P, Q, T, L, E>
 where
     P: Parser<T, L, E>,
     Q: Parser<V, L, E>,
@@ -275,9 +277,9 @@ impl<'p, T, L, E> Parser<T, L, E> for Boxed<dyn Parser<T, L, E> + 'p> {
     }
 }
 
-pub struct End<P>(P);
+pub struct End<P, L, E>(P, PhantomData<(L, E)>);
 
-impl<T, L: Span, E, P: Parser<T, L, E>> Parser<T, L, E> for End<P> {
+impl<T, L: Span, E, P: Parser<T, L, E>> Parser<T, L, E> for End<P, L, E> {
     fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, T, L, E> {
         self.0
             .parse(source, location)
@@ -291,17 +293,17 @@ impl<T, L: Span, E, P: Parser<T, L, E>> Parser<T, L, E> for End<P> {
     }
 }
 
-pub struct Catch<P>(P);
+pub struct Catch<P, L, E>(P, PhantomData<(L, E)>);
 
-impl<T, L, E, P: Parser<T, L, E>> Parser<T, L, E> for Catch<P> {
+impl<T, L, E, P: Parser<T, L, E>> Parser<T, L, E> for Catch<P, L, E> {
     fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, T, L, E> {
         self.0.parse(source, location).catch()
     }
 }
 
-pub struct MetaMap<P>(P);
+pub struct MetaMap<P, L, E>(P, PhantomData<(L, E)>);
 
-impl<T, L: Span, E, P: Parser<T, L, E>> Parser<Meta<T, L>, L, E> for MetaMap<P> {
+impl<T, L: Span, E, P: Parser<T, L, E>> Parser<Meta<T, L>, L, E> for MetaMap<P, L, E> {
     fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, Meta<T, L>, L, E> {
         self.0.parse(source, location).meta()
     }
