@@ -7,45 +7,76 @@ use std::path::Path;
 /// Create a new source file location
 ///
 /// This will create a location for the start of a source file.
-pub fn new_location() -> impl Span + fmt::Display {
-    SourceLocation::default().span()
+pub fn new_location() -> Span {
+    Span::default()
 }
 
 /// Create a new source file location that knows the source path to the file.
 ///
 /// This will create a location for the start of the source file with the given path.
-pub fn path_location<P>(path: P) -> impl Span + fmt::Display + AsRef<Path>
-where
-    P: AsRef<Path> + Clone + fmt::Debug,
-{
+pub fn path_location<P>(path: P) -> FileSource<Span> {
     FileSource::new(path).span()
 }
 
-/// Object that can track a single location in source
+/// Location of a single character within a text source
 ///
-/// This tracks the location in a source file as each character is read. It can also be used to
+/// This tracks the location in a text source as each character is read. It can also be used to
 /// present a human-readable form indication where in the source the character is.
-pub trait Location: Sized + Clone + fmt::Debug {
-    /// The type of span produced by this location
-    type Span: Span + fmt::Debug;
+#[derive(Debug, Default, Clone, Copy)]
+pub struct Location {
+    character: usize,
+    byte: usize,
+    row: usize,
+    column: usize,
+}
 
+impl fmt::Display for Location {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}:{}", self.row, self.column)
+    }
+}
+
+impl Location {
     /// Get the chracter index in the source (0-indexed)
-    fn character(&self) -> usize;
+    fn character(&self) -> usize {
+        self.character
+    }
 
     /// Get the bytes index in the source (0-indexed)
-    fn byte(&self) -> usize;
+    fn byte(&self) -> usize {
+        self.byte
+    }
 
     /// Get the row in the source (0-indexed)
-    fn row(&self) -> usize;
+    fn row(&self) -> usize {
+        self.row
+    }
 
     /// Get the column in the row (0-indexed)
-    fn column(&self) -> usize;
+    fn column(&self) -> usize {
+        self.column
+    }
 
     /// Move to the location after the given character
-    fn after(&mut self, next_character: char);
+    fn after(&mut self, next_character: char) {
+        self.character += 1;
+        self.byte += next_character.len_utf8();
+
+        if next_character == '\n' {
+            self.row += 1;
+            self.column = 0;
+        } else {
+            self.column += 1;
+        }
+    }
 
     /// Create an empty span starting at this location
-    fn span(self) -> Self::Span;
+    fn span(self) -> Span {
+        Span {
+            start: self,
+            end: self,
+        }
+    }
 
     /// Bind to an object
     fn bind<T>(self, object: T) -> Meta<T, Self> {
@@ -53,27 +84,44 @@ pub trait Location: Sized + Clone + fmt::Debug {
     }
 }
 
-/// Object that can track a span withing a source
+/// The location of a sequence of characters within a text source
 ///
-/// This tracks a region of characters from a source file. It can also be used to present
+/// This tracks a span of characters from a text source. It can also be used to present
 /// a human-readable location of the range in the source.
-pub trait Span: Sized + Clone + fmt::Debug {
-    /// The kind of location referred to by this span
-    type Location: Location;
+#[derive(Debug, Clone, Copy)]
+pub struct Span {
+    start: Location,
+    end: Location,
+}
 
+impl fmt::Display for Span {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}..{}", self.start, self.end)
+    }
+}
+
+impl Span {
     /// Get the start of the span
-    fn start(&self) -> &Self::Location;
+    fn start(&self) -> &Location {
+        &self.start
+    }
 
     /// Get a mutable reference to the start
-    fn start_mut(&mut self) -> &mut Self::Location;
+    fn start_mut(&mut self) -> &mut Location {
+        &mut self.start
+    }
 
     /// Get the end of the span
     ///
     /// The end itself is not part of the span
-    fn end(&self) -> &Self::Location;
+    fn end(&self) -> &Location {
+        &self.end
+    }
 
     /// Get a mutable reference to the end
-    fn end_mut(&mut self) -> &mut Self::Location;
+    fn end_mut(&mut self) -> &mut Location {
+        &mut self.end
+    }
 
     /// Get the number of characters between the start and the end
     fn characters(&self) -> usize {
@@ -120,101 +168,14 @@ pub trait Span: Sized + Clone + fmt::Debug {
     }
 }
 
-/// A source file location
-#[derive(Debug, Default, Clone, Copy)]
-struct SourceLocation {
-    character: usize,
-    byte: usize,
-    row: usize,
-    column: usize,
-}
-
-impl fmt::Display for SourceLocation {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}:{}", self.row, self.column)
-    }
-}
-
-impl Location for SourceLocation {
-    type Span = SourceSpan;
-
-    fn character(&self) -> usize {
-        self.character
-    }
-
-    fn byte(&self) -> usize {
-        self.byte
-    }
-
-    fn row(&self) -> usize {
-        self.row
-    }
-
-    fn column(&self) -> usize {
-        self.column
-    }
-
-    fn after(&mut self, next_character: char) {
-        self.character += 1;
-        self.byte += next_character.len_utf8();
-
-        if next_character == '\n' {
-            self.row += 1;
-            self.column = 0;
-        } else {
-            self.column += 1;
-        }
-    }
-
-    fn span(self) -> Self::Span {
-        SourceSpan {
-            start: self,
-            end: self,
-        }
-    }
-}
-
-/// A span within a source file, non-inclusive of the end
+/// A location within a file on disk
 #[derive(Debug, Clone, Copy)]
-struct SourceSpan {
-    start: SourceLocation,
-    end: SourceLocation,
-}
-
-impl fmt::Display for SourceSpan {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}..{}", self.start, self.end)
-    }
-}
-
-impl Span for SourceSpan {
-    type Location = SourceLocation;
-
-    fn start(&self) -> &Self::Location {
-        &self.start
-    }
-
-    fn start_mut(&mut self) -> &mut Self::Location {
-        &mut self.start
-    }
-
-    fn end(&self) -> &Self::Location {
-        &self.end
-    }
-
-    fn end_mut(&mut self) -> &mut Self::Location {
-        &mut self.end
-    }
-}
-
-/// A locator in a particular file
-#[derive(Debug, Clone, Copy)]
-struct FileSource<P, I> {
+pub struct FileSource<P, I> {
     inner: I,
     path: P,
 }
 
-impl<P: AsRef<Path>> FileSource<P, SourceLocation> {
+impl<P: AsRef<Path>, I> FileSource<P, I> {
     fn new(path: P) -> Self {
         FileSource {
             inner: Default::default(),
@@ -229,29 +190,7 @@ impl<P: AsRef<Path>, I: fmt::Display> fmt::Display for FileSource<P, I> {
     }
 }
 
-impl<P: AsRef<Path> + Clone + fmt::Debug, I: Location> Location for FileSource<P, I> {
-    type Span = FileSource<P, I::Span>;
-
-    fn character(&self) -> usize {
-        self.inner.character()
-    }
-
-    fn byte(&self) -> usize {
-        self.inner.byte()
-    }
-
-    fn row(&self) -> usize {
-        self.inner.row()
-    }
-
-    fn column(&self) -> usize {
-        self.inner.column()
-    }
-
-    fn after(&mut self, next_character: char) {
-        self.inner.after(next_character)
-    }
-
+impl<P, I> FileSource<P, I> {
     fn span(self) -> Self::Span {
         FileSource {
             inner: self.inner.span(),
@@ -260,29 +199,23 @@ impl<P: AsRef<Path> + Clone + fmt::Debug, I: Location> Location for FileSource<P
     }
 }
 
-impl<P: AsRef<Path> + Clone + fmt::Debug, I: Span + fmt::Debug> Span for FileSource<P, I> {
-    type Location = I::Location;
-
-    fn start(&self) -> &Self::Location {
-        self.inner.start()
-    }
-
-    fn start_mut(&mut self) -> &mut Self::Location {
-        self.inner.start_mut()
-    }
-
-    fn end(&self) -> &Self::Location {
-        self.inner.end()
-    }
-
-    fn end_mut(&mut self) -> &mut Self::Location {
-        self.inner.end_mut()
-    }
-}
-
 impl<P: AsRef<Path>, I> AsRef<Path> for FileSource<P, I> {
     fn as_ref(&self) -> &Path {
         self.path.as_ref()
+    }
+}
+
+impl<P, I> Deref for FileSource {
+    type Target = I;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl<P, I> DerefMut for FileSource {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
     }
 }
 
@@ -361,53 +294,11 @@ impl<T, I> DerefMut for Meta<T, I> {
     }
 }
 
-impl<T: Clone + fmt::Debug, I: Location> Location for Meta<T, I> {
-    type Span = Meta<T, I::Span>;
-
-    fn character(&self) -> usize {
-        self.location.character()
-    }
-
-    fn byte(&self) -> usize {
-        self.location.byte()
-    }
-
-    fn row(&self) -> usize {
-        self.location.row()
-    }
-
-    fn column(&self) -> usize {
-        self.location.column()
-    }
-
-    fn after(&mut self, next_character: char) {
-        self.location.after(next_character)
-    }
-
+impl<T> Meta<T, Location> {
     fn span(self) -> Self::Span {
         Meta {
             location: self.location.span(),
             inner: self.inner,
         }
-    }
-}
-
-impl<T: Clone + fmt::Debug, I: Span> Span for Meta<T, I> {
-    type Location = I::Location;
-
-    fn start(&self) -> &Self::Location {
-        self.location.start()
-    }
-
-    fn start_mut(&mut self) -> &mut Self::Location {
-        self.location.start_mut()
-    }
-
-    fn end(&self) -> &Self::Location {
-        self.location.end()
-    }
-
-    fn end_mut(&mut self) -> &mut Self::Location {
-        self.location.end_mut()
     }
 }

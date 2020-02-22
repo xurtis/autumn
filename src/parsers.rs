@@ -22,7 +22,7 @@
 //! ```rust
 //! # use autumn::prelude::*;
 //! /// Parses C-like identifiers
-//! fn identifier<L: Span>(source: &str, location: L) -> ParseResult<String, L> {
+//! fn identifier(source: &str, location: Span) -> ParseResult<String> {
 //!     alphabetic
 //!         .or("_")
 //!         .and(alphanumeric.or("_").multiple().maybe())
@@ -31,12 +31,12 @@
 //! }
 //!
 //! /// Parses integers
-//! fn integer<L: Span>(source: &str, location: L) -> ParseResult<String, L> {
+//! fn integer(source: &str, location: Span) -> ParseResult<String> {
 //!     digit.multiple().map(|s| s.to_string()).parse(source, location)
 //! }
 //!
 //! /// Parses float literals
-//! fn float<L: Span>(source: &str, location: L) -> ParseResult<String, L> {
+//! fn float(source: &str, location: Span) -> ParseResult<String> {
 //!     digit
 //!         .multiple()
 //!         .and(".".and(digit.multiple()).maybe())
@@ -59,7 +59,7 @@
 //! ```rust
 //! # use autumn::prelude::*;
 //! /// Parse C18 storage class specifiers
-//! fn storage_class<L: Span>(source: &str, location: L) -> ParseResult<String, L> {
+//! fn storage_class(source: &str, location: Span) -> ParseResult<String> {
 //!     "auto"
 //!         .or("extern")
 //!         .or("register")
@@ -82,7 +82,7 @@
 //! ```rust
 //! # use autumn::prelude::*;
 //! /// Parse simple single-character operators
-//! fn operator<L: Span>(source: &str, location: L) -> ParseResult<char, L> {
+//! fn operator(source: &str, location: Span) -> ParseResult<char> {
 //!     '+'.or('-').or('*').or('/').or('%').parse(source, location)
 //! }
 //! ```
@@ -98,7 +98,7 @@
 //! ```rust
 //! # use autumn::prelude::*;
 //! /// Parse an exact number of a specific character
-//! fn counted<L: Span>(character: char, count: usize) -> impl Parser<List<char>, L> {
+//! fn counted(character: char, count: usize) -> impl Parser<List<char>> {
 //!     closure(move |source, location| {
 //!         if count > 0 {
 //!             character
@@ -126,10 +126,10 @@
 //! struct InvalidIdentifier(String);
 //!
 //! /// Parses C-like identifiers
-//! fn identifier<L: Span>(
+//! fn identifier(
 //!     source: &str,
-//!     location: L,
-//! ) -> ParseResult<Option<String>, L, InvalidIdentifier> {
+//!     location: Span,
+//! ) -> ParseResult<Option<String>, InvalidIdentifier> {
 //!     alphabetic
 //!         .or("_")
 //!         .and(alphanumeric.or("_").multiple())
@@ -160,7 +160,7 @@ use crate::{List, ParseResult, Parser};
 ///
 /// ```rust
 /// # use autumn::prelude::*;
-/// fn alphabet<L: Span>(source: &str, location: L) -> ParseResult<String, L, &'static str> {
+/// fn alphabet(source: &str, location: Span) -> ParseResult<String, &'static str> {
 ///     "abcde"
 ///         .and(digit)
 ///         .and_then(|text| {
@@ -174,7 +174,7 @@ use crate::{List, ParseResult, Parser};
 ///         .parse(source, location)
 /// }
 /// ```
-pub fn value<'p, T: Clone + 'p, L: Span + 'p, E: 'p>(value: T) -> Boxed<dyn Parser<T, L, E> + 'p> {
+pub fn value<'p, T: Clone + 'p, E: 'p>(value: T) -> Boxed<dyn Parser<T, E> + 'p> {
     closure(move |source, location| success(value.clone(), source, location)).boxed()
 }
 
@@ -187,7 +187,7 @@ pub fn value<'p, T: Clone + 'p, L: Span + 'p, E: 'p>(value: T) -> Boxed<dyn Pars
 ///
 /// ```rust
 /// # use autumn::prelude::*;
-/// fn alphabet<L: Span>(source: &str, location: L) -> ParseResult<String, L, &'static str> {
+/// fn alphabet(source: &str, location: Span) -> ParseResult<String, &'static str> {
 ///     "abcde"
 ///         .and(digit)
 ///         .and_then(|text| {
@@ -201,10 +201,10 @@ pub fn value<'p, T: Clone + 'p, L: Span + 'p, E: 'p>(value: T) -> Boxed<dyn Pars
 ///         .parse(source, location)
 /// }
 /// ```
-pub fn error<'p, T: Clone + 'p, L: Span + 'p, E: Clone + 'p>(
+pub fn error<'p, T: Clone + 'p, E: Clone + 'p>(
     value: T,
     error: E,
-) -> Boxed<dyn Parser<T, L, E> + 'p> {
+) -> Boxed<dyn Parser<T, E> + 'p> {
     closure(move |source, location| failure(value.clone(), error.clone(), source, location)).boxed()
 }
 
@@ -219,7 +219,7 @@ pub fn error<'p, T: Clone + 'p, L: Span + 'p, E: Clone + 'p>(
 ///
 /// ```rust
 /// # use autumn::prelude::*;
-/// fn alphabet<L: Span>(source: &str, location: L) -> ParseResult<String, L, &'static str> {
+/// fn alphabet(source: &str, location: Span) -> ParseResult<String, &'static str> {
 ///     "abcde"
 ///         .and(digit)
 ///         .and_then(|text| {
@@ -234,38 +234,38 @@ pub fn error<'p, T: Clone + 'p, L: Span + 'p, E: Clone + 'p>(
 ///         .parse(source, location)
 /// }
 /// ```
-pub fn throw<'p, T: Clone + 'p, L: Span + 'p, E: Clone + 'p>(
+pub fn throw<'p, T: Clone + 'p, E: Clone + 'p>(
     value: T,
     error: E,
-) -> Boxed<dyn Parser<T, L, E> + 'p> {
+) -> Boxed<dyn Parser<T, E> + 'p> {
     closure(move |source, location| exception(value.clone(), error.clone(), source, location))
         .boxed()
 }
 
-fn success<T, L: Span, E>(value: T, source: &str, location: L) -> ParseResult<T, L, E> {
+fn success<T, E>(value: T, source: &str, location: Span) -> ParseResult<T, E> {
     ParseResult::success(value, source, location)
 }
 
-fn failure<'s, T, L: Span, E>(
+fn failure<'s, T, E>(
     value: T,
     error: E,
     source: &'s str,
-    location: L,
-) -> ParseResult<'s, T, L, E> {
+    location: Span,
+) -> ParseResult<'s, T, E> {
     ParseResult::error(value, error, source, location)
 }
 
-fn exception<'s, T, L: Span, E>(
+fn exception<'s, T, E>(
     value: T,
     error: E,
     source: &'s str,
-    location: L,
-) -> ParseResult<'s, T, L, E> {
+    location: Span,
+) -> ParseResult<'s, T, E> {
     ParseResult::exception(value, error, source, location)
 }
 
 /// A parser that consumes no input and produces an empty [`List<char>`](../struct.List.html)
-pub fn empty<T, L: Span, E>(source: &str, location: L) -> ParseResult<List<T>, L, E> {
+pub fn empty<T, E>(source: &str, location: Span) -> ParseResult<List<T>, E> {
     ParseResult::success(List::new(), source, location)
 }
 
@@ -279,7 +279,7 @@ pub fn empty<T, L: Span, E>(source: &str, location: L) -> ParseResult<List<T>, L
 /// ```rust
 /// # use autumn::prelude::*;
 /// /// Parse an exact number of a specific character
-/// fn counted<L: Span>(character: char, count: usize) -> impl Parser<List<char>, L> {
+/// fn counted(character: char, count: usize) -> impl Parser<List<char>> {
 ///     closure(move |source, location| {
 ///         if count > 0 {
 ///             character
@@ -292,9 +292,9 @@ pub fn empty<T, L: Span, E>(source: &str, location: L) -> ParseResult<List<T>, L
 ///     })
 /// }
 /// ```
-pub fn closure<F, T, L, E>(function: F) -> impl Parser<T, L, E>
+pub fn closure<F, T, E>(function: F) -> impl Parser<T, E>
 where
-    F: for<'s> Fn(&'s str, L) -> ParseResult<'s, T, L, E>,
+    F: for<'s> Fn(&'s str) -> ParseResult<'s, T, E>,
 {
     function
 }
@@ -303,7 +303,7 @@ where
 /// [`List<char>`](../struct.List.html)
 ///
 /// See [specifying characters](index.html#specifying-characters).
-pub fn any_character<L: Span, E>(source: &str, mut location: L) -> ParseResult<List<char>, L, E> {
+pub fn any_character<E>(source: &str, mut location: Span) -> ParseResult<List<char>, E> {
     if let Some((_, next)) = source.char_indices().next() {
         location.after(next);
         ParseResult::success(List::new().push(next), &source[next.len_utf8()..], location)
@@ -313,7 +313,7 @@ pub fn any_character<L: Span, E>(source: &str, mut location: L) -> ParseResult<L
 }
 
 /// Parses a single character from the input
-pub fn character<L: Span, E>(source: &str, mut location: L) -> ParseResult<char, L, E> {
+pub fn character<E>(source: &str, mut location: Span) -> ParseResult<char, E> {
     if let Some((_, next)) = source.char_indices().next() {
         location.after(next);
         ParseResult::success(next, &source[next.len_utf8()..], location)
@@ -322,19 +322,19 @@ pub fn character<L: Span, E>(source: &str, mut location: L) -> ParseResult<char,
     }
 }
 
-fn char_condition<'s, L: Span, E>(
+fn char_condition<'s, E>(
     condition: &impl Fn(char) -> bool,
     source: &'s str,
-    location: L,
-) -> ParseResult<'s, List<char>, L, E> {
+    location: Span,
+) -> ParseResult<'s, List<char>, E> {
     character
         .condition(|c| condition(*c))
         .map(List::single)
         .parse(source, location)
 }
 
-impl<L: Span, E> Parser<char, L, E> for char {
-    fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, char, L, E> {
+impl<E> Parser<char, E> for char {
+    fn parse<'s>(&self, source: &'s str, location: Span) -> ParseResult<'s, char, E> {
         let expected = *self;
         character
             .condition(move |c| *c == expected)
@@ -342,8 +342,8 @@ impl<L: Span, E> Parser<char, L, E> for char {
     }
 }
 
-impl<L: Span, E> Parser<char, L, E> for &char {
-    fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, char, L, E> {
+impl<E> Parser<char, E> for &char {
+    fn parse<'s>(&self, source: &'s str, location: Span) -> ParseResult<'s, char, E> {
         (*self).parse(source, location)
     }
 }
@@ -351,43 +351,43 @@ impl<L: Span, E> Parser<char, L, E> for &char {
 /// Parses a single ASCII digit character from the input
 ///
 /// See [specifying characters](index.html#specifying-characters).
-pub fn digit<L: Span, E>(source: &str, location: L) -> ParseResult<List<char>, L, E> {
+pub fn digit<E>(source: &str, location: Span) -> ParseResult<List<char>, E> {
     char_condition(&|c| c.is_ascii_digit(), source, location)
 }
 
 /// Parses a single ASCII alphabetic character from the input
 ///
 /// See [specifying characters](index.html#specifying-characters).
-pub fn alphabetic<L: Span, E>(source: &str, location: L) -> ParseResult<List<char>, L, E> {
+pub fn alphabetic<E>(source: &str, location: Span) -> ParseResult<List<char>, E> {
     char_condition(&|c| c.is_ascii_alphabetic(), source, location)
 }
 
 /// Parses a single ASCII alphabetic or digit character from the input
 ///
 /// See [specifying characters](index.html#specifying-characters).
-pub fn alphanumeric<L: Span, E>(source: &str, location: L) -> ParseResult<List<char>, L, E> {
+pub fn alphanumeric<E>(source: &str, location: Span) -> ParseResult<List<char>, E> {
     char_condition(&|c| c.is_ascii_alphanumeric(), source, location)
 }
 
 /// Parses a single Unicode whitespace character from the input
 ///
 /// See [specifying characters](index.html#specifying-characters).
-pub fn whitespace<L: Span, E>(source: &str, location: L) -> ParseResult<List<char>, L, E> {
+pub fn whitespace<E>(source: &str, location: Span) -> ParseResult<List<char>, E> {
     char_condition(&|c| c.is_whitespace(), source, location)
 }
 
 /// Parses one or more Unicode whitespace characters from the input
 ///
 /// See [specifying characters](index.html#specifying-characters).
-pub fn space<L: Span, E>(source: &str, location: L) -> ParseResult<List<char>, L, E> {
+pub fn space<E>(source: &str, location: Span) -> ParseResult<List<char>, E> {
     whitespace.multiple().parse(source, location)
 }
 
-fn exact_rec<'s, L: Span, E>(
+fn exact_rec<'s, E>(
     exact: &str,
     source: &'s str,
-    location: L,
-) -> ParseResult<'s, List<char>, L, E> {
+    location: Span,
+) -> ParseResult<'s, List<char>, E> {
     if let Some(next) = exact.chars().next() {
         let remaining = &exact[next.len_utf8()..];
         next.map(List::single)
@@ -401,20 +401,20 @@ fn exact_rec<'s, L: Span, E>(
     }
 }
 
-impl<L: Span, E> Parser<List<char>, L, E> for str {
-    fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, List<char>, L, E> {
+impl<E> Parser<List<char>, E> for str {
+    fn parse<'s>(&self, source: &'s str, location: Span) -> ParseResult<'s, List<char>, E> {
         exact_rec(self, source, location)
     }
 }
 
-impl<L: Span, E> Parser<List<char>, L, E> for &str {
-    fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, List<char>, L, E> {
+impl<E> Parser<List<char>, E> for &str {
+    fn parse<'s>(&self, source: &'s str, location: Span) -> ParseResult<'s, List<char>, E> {
         exact_rec(self, source, location)
     }
 }
 
-impl<L: Span, E> Parser<List<char>, L, E> for String {
-    fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, List<char>, L, E> {
+impl<E> Parser<List<char>, E> for String {
+    fn parse<'s>(&self, source: &'s str, location: Span) -> ParseResult<'s, List<char>, E> {
         exact_rec(self, source, location)
     }
 }

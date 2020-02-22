@@ -11,7 +11,7 @@
 //!
 //! ```rust
 //! # use autumn::prelude::*;
-//! fn parser<L: Span>(source: &str, location: L) -> ParseResult<String, L> {
+//! fn parser(source: &str, location: Span) -> ParseResult<String> {
 //!     /* ... */
 //! #   unimplemented!()
 //! }
@@ -30,17 +30,17 @@
 //! ```rust
 //! # use autumn::prelude::*;
 //! /// Parse a single alphabetic character or underscore
-//! fn identifier_prefix<L: Span>(source: &str, location: L) -> ParseResult<List<char>, L> {
+//! fn identifier_prefix(source: &str, location: Span) -> ParseResult<List<char>> {
 //!     alphabetic.or("_").parse(source, location)
 //! }
 //!
 //! /// Parse a zero or more letters, digits, and underscores
-//! fn identifier_body<L: Span>(source: &str, location: L) -> ParseResult<List<char>, L> {
+//! fn identifier_body(source: &str, location: Span) -> ParseResult<List<char>> {
 //!     identifier_prefix.or(digit).multiple().maybe().parse(source, location)
 //! }
 //!
 //! /// Accumulate the characters for a single identifier into a string
-//! fn identifier<L: Span>(source: &str, location: L) -> ParseResult<String, L> {
+//! fn identifier(source: &str, location: Span) -> ParseResult<String> {
 //!     identifier_prefix
 //!         .and(identifier_body)
 //!         .map(|s| s.to_string())
@@ -140,10 +140,10 @@
 //! ```rust
 //! # use autumn::prelude::*;
 //! /// Parses the first 5 letters of the alphabet in order
-//! fn alphabet_parse<L: Span>(
+//! fn alphabet_parse(
 //!     source: &str,
-//!     location: L,
-//! ) -> ParseResult<List<char>, L, &'static str> {
+//!     location: Span,
+//! ) -> ParseResult<List<char>, &'static str> {
 //!     "abcde"
 //!         .on_none(
 //!             alphabetic
@@ -187,10 +187,10 @@
 //! ```rust
 //! # use autumn::prelude::*;
 //! /// Parses the first 5 letters of the alphabet in order
-//! fn alphabet_parse<L: Span>(
+//! fn alphabet_parse(
 //!     source: &str,
-//!     location: L,
-//! ) -> ParseResult<List<char>, L, &'static str> {
+//!     location: Span,
+//! ) -> ParseResult<List<char>, &'static str> {
 //!     "abcde"
 //!         .on_none(
 //!             alphabetic
@@ -224,22 +224,22 @@ mod tests {
 
     const VALID_TOKENS: &'static [&'static str] = &["A", "ABC", "ABC123", "_ABC123"];
 
-    fn token_prefix<L: Span>(source: &str, location: L) -> ParseResult<List<char>, L> {
+    fn token_prefix(source: &str, location: Span) -> ParseResult<List<char>> {
         alphabetic.or("_").parse(source, location)
     }
 
-    fn token_suffix<L: Span>(source: &str, location: L) -> ParseResult<List<char>, L> {
+    fn token_suffix(source: &str, location: Span) -> ParseResult<List<char>> {
         alphabetic.or(digit).or("_").parse(source, location)
     }
 
-    fn token<L: Span>(source: &str, location: L) -> ParseResult<String, L> {
+    fn token(source: &str, location: Span) -> ParseResult<String> {
         token_prefix
             .and(token_suffix.multiple().maybe())
             .map(|s| s.to_string())
             .parse(source, location)
     }
 
-    fn space<L: Span>(source: &str, location: L) -> ParseResult<List<char>, L> {
+    fn space(source: &str, location: Span) -> ParseResult<List<char>> {
         whitespace
             .and(whitespace.multiple().maybe())
             .parse(source, location)
@@ -260,8 +260,8 @@ mod tests {
     const VALID_SEQUENCES: &'static [&'static str] =
         &["The quick brown fox", "jumped over the lazy dog"];
 
-    fn sequence<L: Span>(source: &str, location: L) -> ParseResult<List<String>, L> {
-        fn token_list<L: Span>(source: &str, location: L) -> ParseResult<List<String>, L> {
+    fn sequence(source: &str, location: Span) -> ParseResult<List<String>> {
+        fn token_list(source: &str, location: Span) -> ParseResult<List<String>> {
             token(source, location).map(&List::single)
         }
 
