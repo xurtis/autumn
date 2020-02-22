@@ -100,7 +100,8 @@
 //!  * [`digit`](parsers/fn.digit.html) will parse a single character that is an ASCII digit
 //!    character and produce a [`List<char>`](struct.List.html).
 //!
-//!  * Any `char` can be used to parse itself and produce a [`List<char>`](struct.List.html).
+//!  * Any `&str` or `String` can be used to parse itself and produce a
+//!    [`List<char>`](struct.List.html).
 //!
 //! When invoking a parser the source must be provided as a string slice and the current position
 //! must be provided as a [`Span`](trait.Span.html). An intial span can be provided for the start
