@@ -1,23 +1,26 @@
 //! Basic general-purpose parsers
 
-use crate::combinators::ParserExt;
+use crate::combinators::{Boxed, BoxedParserExt, ParserExt};
 use crate::location::Span;
 use crate::{List, ParseResult, Parser};
 
-pub fn none<T, L, E>(_: &str, location: L) -> ParseResult<T, L, E> {
-    ParseResult::none(location)
+pub fn value<'p, T: Clone + 'p, L: Span + 'p, E: 'p>(value: T) -> Boxed<dyn Parser<T, L, E> + 'p> {
+    closure(move |source, location| success(value.clone(), source, location)).boxed()
 }
 
-pub fn value<T: Clone, L: Span, E>(value: T) -> impl Parser<T, L, E> {
-    closure(move |source, location| success(value.clone(), source, location))
+pub fn error<'p, T: Clone + 'p, L: Span + 'p, E: Clone + 'p>(
+    value: T,
+    error: E,
+) -> Boxed<dyn Parser<T, L, E> + 'p> {
+    closure(move |source, location| failure(value.clone(), error.clone(), source, location)).boxed()
 }
 
-pub fn error<T: Clone, L: Span, E: Clone>(value: T, error: E) -> impl Parser<T, L, E> {
-    closure(move |source, location| failure(value.clone(), error.clone(), source, location))
-}
-
-pub fn throw<T: Clone, L: Span, E: Clone>(value: T, error: E) -> impl Parser<T, L, E> {
+pub fn throw<'p, T: Clone + 'p, L: Span + 'p, E: Clone + 'p>(
+    value: T,
+    error: E,
+) -> Boxed<dyn Parser<T, L, E> + 'p> {
     closure(move |source, location| exception(value.clone(), error.clone(), source, location))
+        .boxed()
 }
 
 fn success<T, L: Span, E>(value: T, source: &str, location: L) -> ParseResult<T, L, E> {

@@ -107,9 +107,9 @@ fn div<L: Span>(source: &str, location: L) -> ParseResult<i32, L, EvalError> {
             .skip(div.map(move |right| (left, right)))
             .and_then(&|(left, right)| {
                 if right != 0 {
-                    value(left / right).boxed()
+                    value(left / right)
                 } else {
-                    throw(1, DivisionByZero(left, right)).boxed()
+                    throw(1, DivisionByZero(left, right))
                 }
             })
             .or(value(left))
@@ -125,9 +125,9 @@ fn rem<L: Span>(source: &str, location: L) -> ParseResult<i32, L, EvalError> {
                 .skip(rem.map(move |right| (left, right)))
                 .and_then(&|(left, right)| {
                     if right != 0 {
-                        value(left % right).boxed()
+                        value(left % right)
                     } else {
-                        throw(1, ModuloZero(left, right)).boxed()
+                        throw(1, ModuloZero(left, right))
                     }
                 })
                 .or(value(left))
