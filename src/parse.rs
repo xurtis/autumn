@@ -26,7 +26,7 @@ pub struct ParseResult<'s, T, L, E = ()> {
 
 impl<'s, T, L, E> ParseResult<'s, T, L, E> {
     pub fn values<'r>(&'r self) -> impl Iterator<Item = &'r Meta<T, L>> + 'r {
-        self.results.iter().map(InnerResult::value)
+        self.results.iter().flat_map(InnerResult::value)
     }
 
     pub fn is_success(&self) -> bool {
@@ -225,8 +225,12 @@ struct InnerResult<'s, T, L, E = ()> {
 }
 
 impl<'s, T, L, E> InnerResult<'s, T, L, E> {
-    fn value(&self) -> &Meta<T, L> {
-        &self.value
+    fn value(&self) -> Option<&Meta<T, L>> {
+        if !self.is_failure() {
+            Some(&self.value)
+        } else {
+            None
+        }
     }
 
     fn exceptions(&self) -> List<Meta<Rc<E>, L>> {
