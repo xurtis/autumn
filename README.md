@@ -17,7 +17,7 @@ A parser is an item that implements the [`Parser`](trait.Parser.html) trait. The
 way to implement the trait is with a function given the following signature:
 
 ```rust
-fn parser<L: Span>(source: &str, location: L) -> ParseResult<String, L> {
+fn parser(source: &str, location: Span) -> ParseResult<String> {
     /* ... */
 }
 ```
@@ -34,17 +34,17 @@ underscores.
 
 ```rust
 /// Parse a single alphabetic character or underscore
-fn identifier_prefix<L: Span>(source: &str, location: L) -> ParseResult<List<char>, L> {
+fn identifier_prefix(source: &str, location: Span) -> ParseResult<List<char>> {
     alphabetic.or("_").parse(source, location)
 }
 
 /// Parse a zero or more letters, digits, and underscores
-fn identifier_body<L: Span>(source: &str, location: L) -> ParseResult<List<char>, L> {
+fn identifier_body(source: &str, location: Span) -> ParseResult<List<char>> {
     identifier_prefix.or(digit).multiple().maybe().parse(source, location)
 }
 
 /// Accumulate the characters for a single identifier into a string
-fn identifier<L: Span>(source: &str, location: L) -> ParseResult<String, L> {
+fn identifier(source: &str, location: Span) -> ParseResult<String> {
     identifier_prefix
         .and(identifier_body)
         .map(|s| s.to_string())
@@ -73,9 +73,9 @@ A number of the most common combinators are shown in the example above.
  * [`maybe`](combinators/trait.ParserExt.html#method.maybe) will take a parser that produces a
    [`List`](struct.List.html) and attempt to apply that parser zero or one times. When using
    both [`multiple`](combinators/trait.ParserExt.html#method.multiple) and
-   [`maybe`](combinators/struct.Maybe.html) to achieve zero or more repetitions,
-   `multiple().maybe()` must be used; `maybe().multiple()` can find an infinite number of ways
-   to apply any parser on even an empty string.
+   [`maybe`](combinators/trait.ParserExt.html#method.maybe) to achieve zero or more
+   repetitions, `multiple().maybe()` must be used; `maybe().multiple()` can find an infinite
+   number of ways to apply any parser on even an empty string.
 
  * [`map`](combinators/trait.ParserExt.html#method.map) can be used to transform the type
    produced by a particular parser.
@@ -130,10 +130,7 @@ will produce an error associated with the alphabetic characters starting at the 
 
 ```rust
 /// Parses the first 5 letters of the alphabet in order
-fn alphabet_parse<L: Span>(
-    source: &str,
-    location: L,
-) -> ParseResult<List<char>, L, &'static str> {
+fn alphabet_parse(source: &str, location: Span) -> ParseResult<List<char>, &'static str> {
     "abcde"
         .on_none(
             alphabetic
@@ -176,10 +173,7 @@ be associated with the span of source code that was consumed to produce the erro
 
 ```rust
 /// Parses the first 5 letters of the alphabet in order
-fn alphabet_parse<L: Span>(
-    source: &str,
-    location: L,
-) -> ParseResult<List<char>, L, &'static str> {
+fn alphabet_parse(source: &str, location: Span) -> ParseResult<List<char>, &'static str> {
     "abcde"
         .on_none(
             alphabetic

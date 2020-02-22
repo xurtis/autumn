@@ -3,29 +3,29 @@ use std::rc::Rc;
 
 /// A parser takes an input source and produces an array of potential tagged values and an array of
 /// errors.
-pub trait Parser<T, L, E = ()> {
-    fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, T, L, E>;
+pub trait Parser<T, E = ()> {
+    fn parse<'s>(&self, source: &'s str, location: Span) -> ParseResult<'s, T, E>;
 }
 
-impl<T, L, E, F> Parser<T, L, E> for F
+impl<T, E, F> Parser<T, E> for F
 where
-    F: for<'s> Fn(&'s str, L) -> ParseResult<'s, T, L, E>,
+    F: for<'s> Fn(&'s str, Span) -> ParseResult<'s, T, E>,
 {
-    fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, T, L, E> {
+    fn parse<'s>(&self, source: &'s str, location: Span) -> ParseResult<'s, T, E> {
         self(source, location)
     }
 }
 
 #[derive(Debug)]
-pub struct ParseResult<'s, T, L, E = ()> {
-    start: L,
+pub struct ParseResult<'s, T, E = ()> {
+    start: Span,
     success: bool,
     failure: bool,
-    results: Vec<InnerResult<'s, T, L, E>>,
+    results: Vec<InnerResult<'s, T, E>>,
 }
 
-impl<'s, T, L, E> ParseResult<'s, T, L, E> {
-    pub fn values<'r>(&'r self) -> impl Iterator<Item = &'r Meta<T, L>> + 'r {
+impl<'s, T, E> ParseResult<'s, T, E> {
+    pub fn values<'r>(&'r self) -> impl Iterator<Item = &'r Meta<T, Span>> + 'r {
         self.results.iter().flat_map(InnerResult::value)
     }
 
@@ -41,7 +41,7 @@ impl<'s, T, L, E> ParseResult<'s, T, L, E> {
         self.results.len() == 1
     }
 
-    pub(crate) fn none(location: L) -> Self {
+    pub(crate) fn none(location: Span) -> Self {
         ParseResult {
             start: location,
             success: false,
@@ -74,7 +74,7 @@ impl<'s, T, L, E> ParseResult<'s, T, L, E> {
         }
     }
 
-    pub(crate) fn map<A, F>(self, map: &F) -> ParseResult<'s, A, L, E>
+    pub(crate) fn map<A, F>(self, map: &F) -> ParseResult<'s, A, E>
     where
         F: Fn(T) -> A,
     {
@@ -110,22 +110,22 @@ impl<'s, T, L, E> ParseResult<'s, T, L, E> {
     }
 }
 
-impl<'s, T, L: Clone, E> ParseResult<'s, T, L, E> {
-    pub fn errors<'r>(&'r self) -> impl Iterator<Item = Meta<impl AsRef<E>, L>> + 'r {
+impl<'s, T, E> ParseResult<'s, T, E> {
+    pub fn errors<'r>(&'r self) -> impl Iterator<Item = Meta<impl AsRef<E>, Span>> + 'r {
         self.results
             .iter()
             .flat_map(InnerResult::errors)
             .map(|error| error.as_ref().clone())
     }
 
-    pub fn exceptions<'r>(&'r self) -> impl Iterator<Item = Meta<impl AsRef<E>, L>> + 'r {
+    pub fn exceptions<'r>(&'r self) -> impl Iterator<Item = Meta<impl AsRef<E>, Span>> + 'r {
         self.results
             .iter()
             .flat_map(InnerResult::exceptions)
             .map(|error| error.as_ref().clone())
     }
 
-    pub(crate) fn meta(self) -> ParseResult<'s, Meta<T, L>, L, E> {
+    pub(crate) fn meta(self) -> ParseResult<'s, Meta<T, Span>, E> {
         let ParseResult {
             start,
             success,
@@ -142,15 +142,15 @@ impl<'s, T, L: Clone, E> ParseResult<'s, T, L, E> {
     }
 }
 
-impl<'s, T, L: Clone, E: Clone> ParseResult<'s, T, L, E> {
-    pub fn cloned_errors<'r>(&'r self) -> impl Iterator<Item = Meta<E, L>> + 'r {
+impl<'s, T, E: Clone> ParseResult<'s, T, E> {
+    pub fn cloned_errors<'r>(&'r self) -> impl Iterator<Item = Meta<E, Span>> + 'r {
         self.results
             .iter()
             .flat_map(InnerResult::errors)
             .map(|error| error.as_ref().clone().map(|error| error.as_ref().clone()))
     }
 
-    pub fn cloned_exceptions<'r>(&'r self) -> impl Iterator<Item = Meta<E, L>> + 'r {
+    pub fn cloned_exceptions<'r>(&'r self) -> impl Iterator<Item = Meta<E, Span>> + 'r {
         self.results
             .iter()
             .flat_map(InnerResult::exceptions)
@@ -158,8 +158,8 @@ impl<'s, T, L: Clone, E: Clone> ParseResult<'s, T, L, E> {
     }
 }
 
-impl<'s, T, L: Span, E> ParseResult<'s, T, L, E> {
-    pub(crate) fn error(value: T, error: E, source: &'s str, location: L) -> Self {
+impl<'s, T, E> ParseResult<'s, T, E> {
+    pub(crate) fn error(value: T, error: E, source: &'s str, location: Span) -> Self {
         ParseResult {
             start: location.clone(),
             success: false,
@@ -168,7 +168,7 @@ impl<'s, T, L: Span, E> ParseResult<'s, T, L, E> {
         }
     }
 
-    pub(crate) fn exception(value: T, error: E, source: &'s str, location: L) -> Self {
+    pub(crate) fn exception(value: T, error: E, source: &'s str, location: Span) -> Self {
         ParseResult {
             start: location.clone(),
             success: false,
@@ -177,7 +177,7 @@ impl<'s, T, L: Span, E> ParseResult<'s, T, L, E> {
         }
     }
 
-    pub(crate) fn success(value: T, source: &'s str, location: L) -> Self {
+    pub(crate) fn success(value: T, source: &'s str, location: Span) -> Self {
         ParseResult {
             start: location.clone(),
             success: true,
@@ -186,9 +186,9 @@ impl<'s, T, L: Span, E> ParseResult<'s, T, L, E> {
         }
     }
 
-    pub(crate) fn and_then<A, F>(self, next: &F) -> ParseResult<'s, A, L, E>
+    pub(crate) fn and_then<A, F>(self, next: &F) -> ParseResult<'s, A, E>
     where
-        F: Fn(T, &'s str, L) -> ParseResult<'s, A, L, E>,
+        F: Fn(T, &'s str, Span) -> ParseResult<'s, A, E>,
     {
         let ParseResult { start, results, .. } = self;
         let mut new_results = vec![];
@@ -216,16 +216,16 @@ impl<'s, T, L: Span, E> ParseResult<'s, T, L, E> {
 }
 
 #[derive(Debug)]
-struct InnerResult<'s, T, L, E = ()> {
-    value: Meta<T, L>,
-    exceptions: List<Meta<Rc<E>, L>>,
-    errors: List<Meta<Rc<E>, L>>,
+struct InnerResult<'s, T, E = ()> {
+    value: Meta<T, Span>,
+    exceptions: List<Meta<Rc<E>, Span>>,
+    errors: List<Meta<Rc<E>, Span>>,
     source: &'s str,
-    location: L,
+    location: Span,
 }
 
-impl<'s, T, L, E> InnerResult<'s, T, L, E> {
-    fn value(&self) -> Option<&Meta<T, L>> {
+impl<'s, T, E> InnerResult<'s, T, E> {
+    fn value(&self) -> Option<&Meta<T, Span>> {
         if !self.is_failure() {
             Some(&self.value)
         } else {
@@ -233,11 +233,11 @@ impl<'s, T, L, E> InnerResult<'s, T, L, E> {
         }
     }
 
-    fn exceptions(&self) -> List<Meta<Rc<E>, L>> {
+    fn exceptions(&self) -> List<Meta<Rc<E>, Span>> {
         self.exceptions.reverse()
     }
 
-    fn errors(&self) -> List<Meta<Rc<E>, L>> {
+    fn errors(&self) -> List<Meta<Rc<E>, Span>> {
         self.errors.reverse()
     }
 
@@ -245,7 +245,7 @@ impl<'s, T, L, E> InnerResult<'s, T, L, E> {
         self.exceptions.length() > 0 || self.errors.length() > 0
     }
 
-    fn map<A, F: Fn(T) -> A>(self, map: F) -> InnerResult<'s, A, L, E> {
+    fn map<A, F: Fn(T) -> A>(self, map: F) -> InnerResult<'s, A, E> {
         let InnerResult {
             value,
             exceptions,
@@ -283,8 +283,8 @@ impl<'s, T, L, E> InnerResult<'s, T, L, E> {
     }
 }
 
-impl<'s, T, L: Clone, E> InnerResult<'s, T, L, E> {
-    fn meta(self) -> InnerResult<'s, Meta<T, L>, L, E> {
+impl<'s, T, E> InnerResult<'s, T, E> {
+    fn meta(self) -> InnerResult<'s, Meta<T, Span>, E> {
         let InnerResult {
             value,
             exceptions,
@@ -303,8 +303,8 @@ impl<'s, T, L: Clone, E> InnerResult<'s, T, L, E> {
     }
 }
 
-impl<'s, T, L: Span, E> InnerResult<'s, T, L, E> {
-    fn success(value: T, source: &'s str, mut location: L) -> Self {
+impl<'s, T, E> InnerResult<'s, T, E> {
+    fn success(value: T, source: &'s str, mut location: Span) -> Self {
         let value = Meta::new(value, location.take());
         InnerResult {
             value,
@@ -315,7 +315,7 @@ impl<'s, T, L: Span, E> InnerResult<'s, T, L, E> {
         }
     }
 
-    fn failure(value: T, error: E, source: &'s str, mut location: L) -> Self {
+    fn failure(value: T, error: E, source: &'s str, mut location: Span) -> Self {
         let parse_location = location.take();
         let value = Meta::new(value, parse_location.clone());
         let error = Meta::new(Rc::new(error), parse_location);
@@ -328,7 +328,7 @@ impl<'s, T, L: Span, E> InnerResult<'s, T, L, E> {
         }
     }
 
-    fn exception(value: T, exception: E, source: &'s str, mut location: L) -> Self {
+    fn exception(value: T, exception: E, source: &'s str, mut location: Span) -> Self {
         let parse_location = location.take();
         let value = Meta::new(value, parse_location.clone());
         let exception = Meta::new(Rc::new(exception), parse_location);
@@ -341,9 +341,9 @@ impl<'s, T, L: Span, E> InnerResult<'s, T, L, E> {
         }
     }
 
-    fn and_then<A, F>(self, next: &F) -> ParseResult<'s, A, L, E>
+    fn and_then<A, F>(self, next: &F) -> ParseResult<'s, A, E>
     where
-        F: Fn(T, &'s str, L) -> ParseResult<'s, A, L, E>,
+        F: Fn(T, &'s str, Span) -> ParseResult<'s, A, E>,
     {
         let InnerResult {
             value,
@@ -381,9 +381,9 @@ impl<'s, T, L: Span, E> InnerResult<'s, T, L, E> {
 
     fn combine(
         self,
-        start: &L,
-        existing_exceptions: List<Meta<Rc<E>, L>>,
-        existing_errors: List<Meta<Rc<E>, L>>,
+        start: &Span,
+        existing_exceptions: List<Meta<Rc<E>, Span>>,
+        existing_errors: List<Meta<Rc<E>, Span>>,
     ) -> Self {
         let InnerResult {
             value,
