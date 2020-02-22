@@ -10,8 +10,7 @@
 //! way to implement the trait is with a function given the following signature:
 //!
 //! ```rust
-//! use autumn::prelude::*;
-//!
+//! # use autumn::prelude::*;
 //! fn parser<L: Span>(source: &str, location: L) -> ParseResult<String, L> {
 //!     /* ... */
 //! #   unimplemented!()
@@ -29,11 +28,10 @@
 //! underscores.
 //!
 //! ```rust
-//! use autumn::prelude::*;
-//!
+//! # use autumn::prelude::*;
 //! /// Parse a single alphabetic character or underscore
 //! fn identifier_prefix<L: Span>(source: &str, location: L) -> ParseResult<List<char>, L> {
-//!     alphabetic.or('_').parse(source, location)
+//!     alphabetic.or("_").parse(source, location)
 //! }
 //!
 //! /// Parse a zero or more letters, digits, and underscores
@@ -69,29 +67,30 @@
 //!
 //! A number of the most common combinators are shown in the example above.
 //!
-//!  * [`or`](combinators/struct.Or.html) will take a parser and _additionally_
+//!  * [`or`](combinators/trait.ParserExt.html#method.or) will take a parser and _additionally_
 //!    try an alternative parser at the same location. This can produce a result from both parsers
 //!    if they ar successful.
 //!
-//!  * [`and`](combinators/struct.And.html) will take a parser that produces a
+//!  * [`and`](combinators/trait.ParserExt.html#method.and) will take a parser that produces a
 //!    [`List`](struct.List.html) and append the result of another parser that produces the same
 //!    type of list.
 //!
-//!  * [`multiple`](combinators/struct.Multiple.html) will take a parser that produces a
-//!    [`List`](struct.List.html) and attempt to apply that parser one or more times in succession.
+//!  * [`multiple`](combinators/trait.ParserExt.html#method.multiple) will take a parser that
+//!    produces a [`List`](struct.List.html) and attempt to apply that parser one or more times in
+//!    succession.
 //!
-//!  * [`maybe`](combinators/struct.Maybe.html) will take a parser that produces a
+//!  * [`maybe`](combinators/trait.ParserExt.html#method.maybe) will take a parser that produces a
 //!    [`List`](struct.List.html) and attempt to apply that parser zero or one times. When using
-//!    both [`multiple`](combinators/struct.Multiple.html) and
+//!    both [`multiple`](combinators/trait.ParserExt.html#method.multiple) and
 //!    [`maybe`](combinators/struct.Maybe.html) to achieve zero or more repetitions,
 //!    `multiple().maybe()` must be used; `maybe().multiple()` can find an infinite number of ways
 //!    to apply any parser on even an empty string.
 //!
-//!  * [`map`](combinators/struct.Map.html) can be used to transform the type produced by a
-//!    particular parser.
+//!  * [`map`](combinators/trait.ParserExt.html#method.map) can be used to transform the type
+//!    produced by a particular parser.
 //!
-//!  * [`end`](combinators/struct.End.html) will only produce a successful parse if there is no
-//!    input remaining after the parser.
+//!  * [`end`](combinators/trait.ParserExt.html#method.end) will only produce a successful parse if
+//!    there is no input remaining after the parser.
 //!
 //! A few of the provided [parsers](parsers/index.html) have also been used above.
 //!
@@ -138,8 +137,7 @@
 //! will produce an error associated with the alphabetic characters starting at the same location.
 //!
 //! ```rust
-//! use autumn::prelude::*;
-//!
+//! # use autumn::prelude::*;
 //! /// Parses the first 5 letters of the alphabet in order
 //! fn alphabet_parse<L: Span>(
 //!     source: &str,
@@ -156,13 +154,13 @@
 //! }
 //! ```
 //!
-//! The [`on_none`](combinators/struct.OnNone.html) combinator can be used to provide an
-//! alternative parser that is used only if the original parser was unable to find any valid parse
-//! (including parsers that resulted in an error).
+//! The [`on_none`](combinators/trait.ParserExt.html#method.on_none) combinator can be used to
+//! provide an alternative parser that is used only if the original parser was unable to find any
+//! valid parse (including parsers that resulted in an error).
 //!
-//! The [`on_failure`](combinators/struct.OnFailure.html) combinator can be used to provide an
-//! alternative parser that is used when the original parser produced an error or if no valid parse
-//! was found or if a valid parse associated with an error was found.
+//! The [`on_failure`](combinators/trait.ParserExt.html#method.on_failure) combinator can be used
+//! to provide an alternative parser that is used when the original parser produced an error or if
+//! no valid parse was found or if a valid parse associated with an error was found.
 //!
 //! The [`error`](parsers/fn.error.html) parser will produce a valid parse with the provided value
 //! but will also produce the provided error. This allows parsing to continue and find further
@@ -178,16 +176,15 @@
 //! Exceptions can be used to associate errors with an exact span of input rather than a single
 //! location. The [`throw`](parsers/fn.throw.html) parser can be used exactly like the
 //! [`error`](parsers/fn.error.html) parser except it creates an _exception_, rather than an error,
-//! at the same location. The [`catch`](combinators/struct.Catch.html) combinator can then be used
-//! to convert the exception into an error and extend the start of the span associated with the
-//! error all the way back to the start of the original parse.
+//! at the same location. The [`catch`](combinators/trait.ParserExt.html#method.catch) combinator
+//! can then be used to convert the exception into an error and extend the start of the span
+//! associated with the error all the way back to the start of the original parse.
 //!
 //! The following example shows how the error produced by the `alphabet_parse` function above can
 //! be associated with the span of source code that was consumed to produce the error.
 //!
 //! ```rust
-//! use autumn::prelude::*;
-//!
+//! # use autumn::prelude::*;
 //! /// Parses the first 5 letters of the alphabet in order
 //! fn alphabet_parse<L: Span>(
 //!     source: &str,
