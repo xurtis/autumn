@@ -25,7 +25,7 @@
 //! fn identifier<L: Span>(source: &str, location: L) -> ParseResult<String, L> {
 //!     alphabetic
 //!         .or("_")
-//!         .and(alphanumeric.or("_").multiple())
+//!         .and(alphanumeric.or("_").multiple().maybe())
 //!         .map(|s| s.to_string())
 //!         .parse(source, location)
 //! }

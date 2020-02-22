@@ -82,9 +82,9 @@
 //!  * [`maybe`](combinators/trait.ParserExt.html#method.maybe) will take a parser that produces a
 //!    [`List`](struct.List.html) and attempt to apply that parser zero or one times. When using
 //!    both [`multiple`](combinators/trait.ParserExt.html#method.multiple) and
-//!    [`maybe`](combinators/struct.Maybe.html) to achieve zero or more repetitions,
-//!    `multiple().maybe()` must be used; `maybe().multiple()` can find an infinite number of ways
-//!    to apply any parser on even an empty string.
+//!    [`maybe`](combinators/trait.ParserExt.html#method.maybe) to achieve zero or more
+//!    repetitions, `multiple().maybe()` must be used; `maybe().multiple()` can find an infinite
+//!    number of ways to apply any parser on even an empty string.
 //!
 //!  * [`map`](combinators/trait.ParserExt.html#method.map) can be used to transform the type
 //!    produced by a particular parser.
