@@ -65,7 +65,7 @@ pub fn any_character<L: Span, E>(source: &str, mut location: L) -> ParseResult<L
     }
 }
 
-pub fn single_character<L: Span, E>(source: &str, mut location: L) -> ParseResult<char, L, E> {
+pub fn character<L: Span, E>(source: &str, mut location: L) -> ParseResult<char, L, E> {
     if let Some((_, next)) = source.char_indices().next() {
         location.after(next);
         ParseResult::success(next, &source[next.len_utf8()..], location)
@@ -79,16 +79,17 @@ fn char_condition<'s, L: Span, E>(
     source: &'s str,
     location: L,
 ) -> ParseResult<'s, List<char>, L, E> {
-    any_character
-        .condition(|c| c.clone().map(|c| *c).all(condition))
+    character
+        .condition(|c| condition(*c))
+        .map(List::single)
         .parse(source, location)
 }
 
 impl<L: Span, E> Parser<char, L, E> for char {
     fn parse<'s>(&self, source: &'s str, location: L) -> ParseResult<'s, char, L, E> {
-        let character = *self;
-        single_character
-            .condition(move |c| *c == character)
+        let expected = *self;
+        character
+            .condition(move |c| *c == expected)
             .parse(source, location)
     }
 }

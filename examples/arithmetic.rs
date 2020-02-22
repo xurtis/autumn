@@ -143,7 +143,7 @@ fn paren<L: Span>(source: &str, location: L) -> ParseResult<i32, L, EvalError> {
         .drop(space.maybe().and(")"))
         .or(literal)
         .on_none(
-            single_character
+            character
                 .condition(|c| !c.is_whitespace())
                 .map(List::single)
                 .multiple()
