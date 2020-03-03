@@ -43,7 +43,7 @@
 //! fn identifier(source: &str, location: Span) -> ParseResult<String> {
 //!     identifier_prefix
 //!         .and(identifier_body)
-//!         .map(|s| s.to_string())
+//!         .to_string()
 //!         .parse(source, location)
 //! }
 //! # for code in &["hello", "world", "_underscore", "_with_numb3r5"] {
@@ -204,7 +204,7 @@ pub use parse::{List, ParseResult, Parser};
 
 /// Common items from the library used when building parsers
 pub mod prelude {
-    pub use crate::combinators::{BoxedParserExt, ListParserExt, ParserExt};
+    pub use crate::combinators::{BoxedParserExt, ListParserExt, ParserExt, TextParserExt};
     pub use crate::parsers::*;
     pub use crate::{new_location, path_location, List, Meta, ParseResult, Parser, Span};
     pub use crate::parse;
@@ -233,7 +233,7 @@ mod tests {
     fn token(source: &str, location: Span) -> ParseResult<String> {
         token_prefix
             .and(token_suffix.multiple().maybe())
-            .map(|s| s.to_string())
+            .to_string()
             .parse(source, location)
     }
 

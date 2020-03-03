@@ -26,7 +26,7 @@
 //!     alphabetic
 //!         .or("_")
 //!         .and(alphanumeric.or("_").multiple().maybe())
-//!         .map(|s| s.to_string())
+//!         .to_string()
 //!         .parse(source, location)
 //! }
 //! ```
@@ -72,13 +72,14 @@
 //!     alphabetic
 //!         .or("_")
 //!         .and(alphanumeric.or("_").multiple())
-//!         .map(|s| Some(s.to_string()))
+//!         .to_string()
+//!         .map(Some)
 //!         .on_none(
 //!             character
 //!                 .condition(|c| !c.is_whitespace())
 //!                 .to_list()
 //!                 .multiple()
-//!                 .map(|s| s.to_string())
+//!                 .to_string()
 //!                 .and_then(|identifier| throw(None, InvalidIdentifier(identifier)))
 //!         )
 //!         .catch()
@@ -102,14 +103,14 @@
 //! # use autumn::prelude::*;
 //! // Produces "right"
 //! fn right() -> impl Parser<String> {
-//!     "left".skip("right").map(|s| s.to_string())
+//!     "left".skip("right").to_string()
 //! }
 //! let skipped = parse(right(), "leftright");
 //! # assert_eq!(skipped.values().next().unwrap(), "right");
 //!
 //! // Produces "left"
 //! fn left() -> impl Parser<String> {
-//!     "left".drop("right").map(|s| s.to_string())
+//!     "left".drop("right").to_string()
 //! }
 //! let dropped = parse(left(), "leftright");
 //! # assert_eq!(dropped.values().next().unwrap(), "left");
@@ -144,7 +145,7 @@
 //! # use autumn::prelude::*;
 //! /// Parses integers
 //! fn integer(source: &str, location: Span) -> ParseResult<String> {
-//!     digit.multiple().map(|s| s.to_string()).parse(source, location)
+//!     digit.multiple().to_string().parse(source, location)
 //! }
 //!
 //! /// Parse a list of integers and get the source location of each integer
@@ -222,13 +223,12 @@ use std::marker::PhantomData;
 
 /// Combinators that can be used on all parsers
 pub trait ParserExt<T, E>: Parser<T, E> + Sized {
-
     /// Evaluate two alternative parsers producing all successful parses from both
     ///
     /// ```rust
     /// # use autumn::prelude::*;
     /// fn alpha_or_beta() -> impl Parser<String> {
-    ///     "alpha".or("beta").map(|s| s.to_string())
+    ///     "alpha".or("beta").to_string()
     /// }
     /// ```
     fn or<P: Parser<T, E>>(self, other: P) -> Or<Self, P, E> {
@@ -260,13 +260,13 @@ pub trait ParserExt<T, E>: Parser<T, E> + Sized {
     /// use Token::*;
     ///
     /// fn identifier() -> impl Parser<String> {
-    ///     alphabetic.and(alphanumeric.multiple().maybe()).map(|s| s.to_string())
+    ///     alphabetic.and(alphanumeric.multiple().maybe()).to_string()
     /// }
     ///
     /// fn literal() -> impl Parser<i32> {
     ///     "-".maybe()
     ///         .and(digit.multiple())
-    ///         .map(|s| s.to_string())
+    ///         .to_string()
     ///         .map(|i| FromStr::from_str(&i).unwrap())
     /// }
     ///
@@ -274,7 +274,7 @@ pub trait ParserExt<T, E>: Parser<T, E> + Sized {
     ///     "identifier"
     ///         .or("literal")
     ///         .drop(space)
-    ///         .map(|s| s.to_string())
+    ///         .to_string()
     ///         .and_then(|parsed| {
     ///             match parsed.as_str() {
     ///                 "identifier" => identifier().map(Identifier).boxed(),
@@ -295,7 +295,7 @@ pub trait ParserExt<T, E>: Parser<T, E> + Sized {
     /// fn failing_parser() -> impl Parser<String, &'static str> {
     ///     "hello"
     ///         .and("world")
-    ///         .map(|s| s.to_string())
+    ///         .to_string()
     ///         .on_none(error(String::new(), "Not hello world"))
     ///         .on_failure(error(String::new(), "Caught error"))
     /// }
@@ -311,7 +311,7 @@ pub trait ParserExt<T, E>: Parser<T, E> + Sized {
     /// fn parse_handle_none() -> impl Parser<String, &'static str> {
     ///     "hello"
     ///         .and("world")
-    ///         .map(|s| s.to_string())
+    ///         .to_string()
     ///         .on_none(error(String::new(), "Not hello world"))
     /// }
     /// ```
@@ -324,7 +324,7 @@ pub trait ParserExt<T, E>: Parser<T, E> + Sized {
     /// ```rust
     /// # use autumn::prelude::*;
     /// fn drop_trailing_whitespace() -> impl Parser<String> {
-    ///     "hello".drop(space).map(|s| s.to_string())
+    ///     "hello".drop(space).to_string()
     /// }
     /// ```
     fn drop<V, P: Parser<V, E>>(self, other: P) -> Drop<Self, P, V, E> {
@@ -336,7 +336,7 @@ pub trait ParserExt<T, E>: Parser<T, E> + Sized {
     /// ```rust
     /// # use autumn::prelude::*;
     /// fn drop_leading_whitespace() -> impl Parser<String> {
-    ///     space.skip("hello").map(|s| s.to_string())
+    ///     space.skip("hello").to_string()
     /// }
     /// ```
     fn skip<V, P: Parser<V, E>>(self, keep: P) -> Skip<Self, P, T, E> {
@@ -368,7 +368,7 @@ pub trait ParserExt<T, E>: Parser<T, E> + Sized {
     ///         .condition(|c| *c != '\n')
     ///         .to_list()
     ///         .drop("\n")
-    ///         .map(|s| s.to_string())
+    ///         .to_string()
     ///         .end()
     /// }
     /// ```
@@ -391,7 +391,7 @@ pub trait ParserExt<T, E>: Parser<T, E> + Sized {
     /// fn identifier_location() -> impl Parser<Meta<String, Span>> {
     ///     alphabetic
     ///         .and(alphanumeric.multiple().maybe())
-    ///         .map(|s| s.to_string())
+    ///         .to_string()
     ///         .meta()
     /// }
     /// ```
@@ -407,7 +407,7 @@ pub trait ParserExt<T, E>: Parser<T, E> + Sized {
     /// fn parse_integers() -> impl Parser<List<i32>> {
     ///     "-".maybe()
     ///         .and(digit.multiple())
-    ///         .map(|s| s.to_string())
+    ///         .to_string()
     ///         .map(|s| FromStr::from_str(&s).unwrap())
     ///         .to_list()
     ///         .multiple()
@@ -442,7 +442,7 @@ impl<T, E, P: Parser<T, E>> ParserExt<T, E> for P {}
 ///     alphabetic
 ///         .or("_")
 ///         .and(alphanumeric.or("_").multiple().maybe())
-///         .map(|s| s.to_string())
+///         .to_string()
 ///         .parse(source, location)
 /// }
 /// ```
@@ -545,6 +545,23 @@ pub trait BoxedParserExt<'p, T, E>: Parser<T, E> + Sized + 'p {
 }
 
 impl<'p, T: 'p, E: 'p, P: Parser<T, E> + 'p> BoxedParserExt<'p, T, E> for P {}
+
+/// Combinators on parser that produce a list of characters
+pub trait TextParserExt<E>: Parser<List<char>, E> + Sized {
+    /// Convert the list of characters into a string within a parser
+    ///
+    /// ```rust
+    /// # use autumn::prelude::*;
+    /// fn identifier() -> impl Parser<String> {
+    ///     alphabetic.and(alphanumeric.multiple().maybe()).to_string()
+    /// }
+    /// ```
+    fn to_string(self) -> StringMap<Self, E> {
+        StringMap(self, PhantomData)
+    }
+}
+
+impl<E, P: Parser<List<char>, E>> TextParserExt<E> for P {}
 
 /// The result of the [`multiple`](trait.ListParserExt.html#method.multiple) function in the
 /// [`ListParserExt`](trait.ListParserExt.html) trait
@@ -811,5 +828,15 @@ pub struct ListMap<P, E>(P, PhantomData<E>);
 impl<T, E, P: Parser<T, E>> Parser<List<T>, E> for ListMap<P, E> {
     fn parse<'s>(&self, source: &'s str, location: Span) -> ParseResult<'s, List<T>, E> {
         self.0.parse(source, location).map(&List::single)
+    }
+}
+
+/// The result of the [`to_string`](trait.TextParserExt.html#method.to_string) function in the
+/// [`TextParserExt`](trait.TextParserExt.html) trait
+pub struct StringMap<P, E>(P, PhantomData<E>);
+
+impl<E, P: Parser<List<char>, E>> Parser<String, E> for StringMap<P, E> {
+    fn parse<'s>(&self, source: &'s str, location: Span) -> ParseResult<'s, String, E> {
+        self.0.parse(source, location).map(&|s| s.to_string())
     }
 }

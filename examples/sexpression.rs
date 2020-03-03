@@ -84,7 +84,7 @@ fn atom_char() -> impl Parser<List<char>> {
 fn atom(source: &str, location: Span) -> ParseResult<SExpression> {
     atom_prefix()
         .and(atom_char().multiple().maybe())
-        .map(|s| s.to_string())
+        .to_string()
         .map(SExpression::Atom)
         .parse(source, location)
 }
@@ -115,7 +115,7 @@ fn string(source: &str, location: Span) -> ParseResult<SExpression> {
             .maybe()
             .drop("\""),
     )
-    .map(|s| s.to_string())
+    .to_string()
     .map(SExpression::String)
     .parse(source, location)
 }

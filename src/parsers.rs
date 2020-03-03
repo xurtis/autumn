@@ -26,13 +26,13 @@
 //!     alphabetic
 //!         .or("_")
 //!         .and(alphanumeric.or("_").multiple().maybe())
-//!         .map(|s| s.to_string())
+//!         .to_string()
 //!         .parse(source, location)
 //! }
 //!
 //! /// Parses integers
 //! fn integer(source: &str, location: Span) -> ParseResult<String> {
-//!     digit.multiple().map(|s| s.to_string()).parse(source, location)
+//!     digit.multiple().to_string().parse(source, location)
 //! }
 //!
 //! /// Parses float literals
@@ -41,7 +41,7 @@
 //!         .multiple()
 //!         .and(".".and(digit.multiple()).maybe())
 //!         .or(".".and(digit.multiple()))
-//!         .map(|s| s.to_string())
+//!         .to_string()
 //!         .parse(source, location)
 //! }
 //! ```
@@ -66,7 +66,7 @@
 //!         .or("static")
 //!         .or("typedef")
 //!         .or("_Thread_local")
-//!         .map(|s| s.to_string())
+//!         .to_string()
 //!         .parse(source, location)
 //! }
 //! ```
@@ -133,13 +133,14 @@
 //!     alphabetic
 //!         .or("_")
 //!         .and(alphanumeric.or("_").multiple())
-//!         .map(|s| Some(s.to_string()))
+//!         .to_string()
+//!         .map(Some)
 //!         .on_none(
 //!             character
 //!                 .condition(|c| !c.is_whitespace())
 //!                 .to_list()
 //!                 .multiple()
-//!                 .map(|s| s.to_string())
+//!                 .to_string()
 //!                 .and_then(|identifier| throw(None, InvalidIdentifier(identifier)))
 //!         )
 //!         .catch()
