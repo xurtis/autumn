@@ -100,17 +100,19 @@
 //!
 //! ```rust
 //! # use autumn::prelude::*;
-//! fn parse(parser: impl Parser<List<char>>, source: &str) -> ParseResult<String> {
-//!     parser.map(|s| s.to_string()).end().parse(source, new_location())
-//! }
-//!
 //! // Produces "right"
-//! let skipped = parse("left".skip("right"), "leftright");
-//! # assert_eq!(skipped.values().next().unwrap().inner_ref(), "right");
+//! fn right() -> impl Parser<String> {
+//!     "left".skip("right").map(|s| s.to_string())
+//! }
+//! let skipped = parse(right(), "leftright");
+//! # assert_eq!(skipped.values().next().unwrap(), "right");
 //!
 //! // Produces "left"
-//! let dropped = parse("left".drop("right"), "leftright");
-//! # assert_eq!(dropped.values().next().unwrap().inner_ref(), "left");
+//! fn left() -> impl Parser<String> {
+//!     "left".drop("right").map(|s| s.to_string())
+//! }
+//! let dropped = parse(left(), "leftright");
+//! # assert_eq!(dropped.values().next().unwrap(), "left");
 //! ```
 //!
 //! Adding conditions to a parser
@@ -175,10 +177,10 @@
 //!         })
 //!         .parse(source, location)
 //! }
-//! # assert!(integer_list("[]", new_location()).is_success());
-//! # assert!(integer_list("[1, 2]", new_location()).is_success());
-//! # assert!(integer_list("[1, 2, 3]", new_location()).is_success());
-//! # assert!(integer_list("[1, 2, 3, 4, ]", new_location()).is_success());
+//! # assert!(parse(integer_list, "[]").is_success());
+//! # assert!(parse(integer_list, "[1, 2]").is_success());
+//! # assert!(parse(integer_list, "[1, 2, 3]").is_success());
+//! # assert!(parse(integer_list, "[1, 2, 3, 4, ]").is_success());
 //! ```
 //!
 //! Matching parser types with dynamic dispatch
@@ -220,53 +222,179 @@ use std::marker::PhantomData;
 
 /// Combinators that can be used on all parsers
 pub trait ParserExt<T, E>: Parser<T, E> + Sized {
+
+    /// Evaluate two alternative parsers producing all successful parses from both
+    ///
+    /// ```rust
+    /// # use autumn::prelude::*;
+    /// fn alpha_or_beta() -> impl Parser<String> {
+    ///     "alpha".or("beta").map(|s| s.to_string())
+    /// }
+    /// ```
     fn or<P: Parser<T, E>>(self, other: P) -> Or<Self, P, E> {
         Or(self, other, PhantomData)
     }
 
+    /// Map the output of a parser to a new value and type
+    ///
+    /// ```rust
+    /// # use autumn::prelude::*;
+    /// use std::str::FromStr;
+    /// fn integer() -> impl Parser<i32> {
+    ///     digit.multiple().map(|i| FromStr::from_str(&i.to_string()).unwrap())
+    /// }
+    /// ```
     fn map<V, F: Fn(T) -> V>(self, map: F) -> Map<Self, F, T, E> {
         Map(self, map, PhantomData)
     }
 
+    /// Apply an additional parser dependant on the result of the preceding parser
+    ///
+    /// ```rust
+    /// # use autumn::prelude::*;
+    /// use std::str::FromStr;
+    /// enum Token {
+    ///     Identifier(String),
+    ///     Literal(i32),
+    /// }
+    /// use Token::*;
+    ///
+    /// fn identifier() -> impl Parser<String> {
+    ///     alphabetic.and(alphanumeric.multiple().maybe()).map(|s| s.to_string())
+    /// }
+    ///
+    /// fn literal() -> impl Parser<i32> {
+    ///     "-".maybe()
+    ///         .and(digit.multiple())
+    ///         .map(|s| s.to_string())
+    ///         .map(|i| FromStr::from_str(&i).unwrap())
+    /// }
+    ///
+    /// fn tagged_token() -> impl Parser<Token> {
+    ///     "identifier"
+    ///         .or("literal")
+    ///         .drop(space)
+    ///         .map(|s| s.to_string())
+    ///         .and_then(|parsed| {
+    ///             match parsed.as_str() {
+    ///                 "identifier" => identifier().map(Identifier).boxed(),
+    ///                 "literal" => literal().map(Literal).boxed(),
+    ///                 _ => unreachable!()
+    ///             }
+    ///         })
+    /// }
+    /// ```
     fn and_then<V, Q: Parser<V, E>, F: Fn(T) -> Q>(self, map: F) -> AndThen<Self, F, T, E> {
         AndThen(self, map, PhantomData)
     }
 
+    /// Apply an alternative parser if the preceding parser produces errors or no successful parses
+    ///
+    /// ```rust
+    /// # use autumn::prelude::*;
+    /// fn failing_parser() -> impl Parser<String, &'static str> {
+    ///     "hello"
+    ///         .and("world")
+    ///         .map(|s| s.to_string())
+    ///         .on_none(error(String::new(), "Not hello world"))
+    ///         .on_failure(error(String::new(), "Caught error"))
+    /// }
+    /// ```
     fn on_failure<P: Parser<T, E>>(self, other: P) -> OnFailure<Self, P, E> {
         OnFailure(self, other, PhantomData)
     }
 
+    /// Apply an alternative parser if the preceding parser produces no successful parses
+    ///
+    /// ```rust
+    /// # use autumn::prelude::*;
+    /// fn parse_handle_none() -> impl Parser<String, &'static str> {
+    ///     "hello"
+    ///         .and("world")
+    ///         .map(|s| s.to_string())
+    ///         .on_none(error(String::new(), "Not hello world"))
+    /// }
+    /// ```
     fn on_none<P: Parser<T, E>>(self, other: P) -> OnNone<Self, P, E> {
         OnNone(self, other, PhantomData)
     }
 
+    /// Apply an additional parser and discard the result
+    ///
+    /// ```rust
+    /// # use autumn::prelude::*;
+    /// fn drop_trailing_whitespace() -> impl Parser<String> {
+    ///     "hello".drop(space).map(|s| s.to_string())
+    /// }
+    /// ```
     fn drop<V, P: Parser<V, E>>(self, other: P) -> Drop<Self, P, V, E> {
         Drop(self, other, PhantomData)
     }
 
+    /// Apply an additional parser and take its output instead
+    ///
+    /// ```rust
+    /// # use autumn::prelude::*;
+    /// fn drop_leading_whitespace() -> impl Parser<String> {
+    ///     space.skip("hello").map(|s| s.to_string())
+    /// }
+    /// ```
     fn skip<V, P: Parser<V, E>>(self, keep: P) -> Skip<Self, P, T, E> {
         Skip(self, keep, PhantomData)
     }
 
-    fn matching<V>(self, compare: V) -> Matching<Self, V, E>
-    where
-        T: PartialEq<V>,
-    {
-        Matching(self, compare, PhantomData)
-    }
-
+    /// Only parse successfully if the output of the parser satisfies a given condition
+    ///
+    /// ```rust
+    /// # use autumn::prelude::*;
+    /// use std::str::FromStr;
+    /// fn foutry_two() -> impl Parser<i32> {
+    ///     digit
+    ///         .multiple()
+    ///         .map(|i| FromStr::from_str(&i.to_string()).unwrap())
+    ///         .condition(|i| *i == 42)
+    /// }
+    /// ```
     fn condition<F: Fn(&T) -> bool>(self, condition: F) -> Condition<Self, F, E> {
         Condition(self, condition, PhantomData)
     }
 
+    /// Only parse successfully if there is no text remaining in the input after a parse
+    ///
+    /// ```rust
+    /// # use autumn::prelude::*;
+    /// fn single_line() -> impl Parser<String> {
+    ///     character
+    ///         .condition(|c| *c != '\n')
+    ///         .map(List::single)
+    ///         .drop("\n")
+    ///         .map(|s| s.to_string())
+    ///         .end()
+    /// }
+    /// ```
     fn end(self) -> End<Self, E> {
         End(self, PhantomData)
     }
 
+    /// Transform all exceptions in the result into errors, moving the start of the associated
+    /// range to the start of the given parser.
+    ///
+    /// See [exceptions](../index.html#exceptions).
     fn catch(self) -> Catch<Self, E> {
         Catch(self, PhantomData)
     }
 
+    /// Wrap the output of a parser with the location of the input parsed
+    ///
+    /// ```rust
+    /// # use autumn::prelude::*;
+    /// fn identifier_location() -> impl Parser<Meta<String, Span>> {
+    ///     alphabetic
+    ///         .and(alphanumeric.multiple().maybe())
+    ///         .map(|s| s.to_string())
+    ///         .meta()
+    /// }
+    /// ```
     fn meta(self) -> MetaMap<Self, E> {
         MetaMap(self, PhantomData)
     }
@@ -275,15 +403,76 @@ pub trait ParserExt<T, E>: Parser<T, E> + Sized {
 impl<T, E, P: Parser<T, E>> ParserExt<T, E> for P {}
 
 /// Combinators on parsers that produce a [`List`](../struct.List.html)
+///
+/// Parsing sequences of characters or values from input is done using parsers that produce a
+/// [`List`](../struct.List.html) and the [`ListParserExt`](trait.ListParserExt.html) trait that is
+/// implemented for all such parsers.
+///
+/// The [`ListParserExt`](trait.ListParserExt.html) provides three combinators for manipulating
+/// parsers over sequences of values:
+///
+///  * [`maybe`](trait.ListParserExt.html#method.maybe) repeats a parser zero or one times,
+///  * [`multiple`](trait.ListParserExt.html#method.multiple) repeats a parser one or more times,
+///    and
+///  * [`and`](trait.ListParserExt.html#method.and) uses two parsers in sequence, concatenating
+///    their results into a single list.
+///
+/// ```rust
+/// # use autumn::prelude::*;
+/// /// Parses C-like identifiers
+/// fn identifier(source: &str, location: Span) -> ParseResult<String> {
+///     alphabetic
+///         .or("_")
+///         .and(alphanumeric.or("_").multiple().maybe())
+///         .map(|s| s.to_string())
+///         .parse(source, location)
+/// }
+/// ```
+///
+/// When using both [`multiple`](trait.ParserExt.html#method.multiple) and
+/// [`maybe`](trait.ParserExt.html#method.maybe) to achieve zero or more repetitions,
+/// `multiple().maybe()` must be used; `maybe().multiple()` can find an infinite number of ways to
+/// apply any parser on even an empty string.
+///
+/// The characters or values read from input are pushed into the [`List`](../struct.List.html) in
+/// last-in first-out (LIFO) order, so the list must be
+/// [reversed](../struct.List.html#method.reverse) in order to iterate over the items in the order
+/// they were added. The `ToString` implementation for [`List<char>`](../struct.List.html) does
+/// this automatically.
 pub trait ListParserExt<T, E>: Parser<List<T>, E> + Sized {
+
+    /// Repeat a parser one or more times
+    ///
+    /// ```rust
+    /// # use autumn::prelude::*;
+    /// fn scream_parser() -> impl Parser<List<char>> {
+    ///     "a".multiple().and("h".multiple()).and("!")
+    /// }
+    /// ```
     fn multiple(self) -> Multiple<Self, E> {
         Multiple(self, PhantomData)
     }
 
+    /// Use a parser once or not at all
+    ///
+    /// ```rust
+    /// # use autumn::prelude::*;
+    /// fn nondeterministic_parser() -> impl Parser<List<char>> {
+    ///     "non".maybe().and("deterministic")
+    /// }
+    /// ```
     fn maybe(self) -> Maybe<Self, E> {
         Maybe(self, PhantomData)
     }
 
+    /// Use one parser after another parser
+    ///
+    /// ```rust
+    /// # use autumn::prelude::*;
+    /// fn simple_identifier() -> impl Parser<List<char>> {
+    ///     alphabetic.and(digit)
+    /// }
+    /// ```
     fn and<P: Parser<List<T>, E>>(self, other: P) -> And<Self, P, E> {
         And(self, other, PhantomData)
     }
@@ -293,7 +482,45 @@ impl<T, E, P: Parser<List<T>, E>> ListParserExt<T, E> for P {}
 
 /// Boxing parsers for [dynamic
 /// dispatch](https://doc.rust-lang.org/book/ch17-02-trait-objects.html#trait-objects-perform-dynamic-dispatch)
+///
+/// There are some cases where a parser may need to produce one of many values within the argument
+/// to the [`and_then`](trait.ParserExt.html#method.and_then) method. In this case it helps to be
+/// able to unify the types of the values with [dynamic
+/// dispatch](https://doc.rust-lang.org/book/ch17-02-trait-objects.html#trait-objects-perform-dynamic-dispatch).
+///
+/// This can be achieved simply with the [`boxed`](trait.BoxedParserExt.html#method.boxed) method.
+///
+/// The [`value`](../parsers/fn.value.html), [`error`](../parsers/fn.error.html), and
+/// [`throw`](../parsers/fn.throw.html) functions all produce boxed parsers with types that will
+/// match as they are commonly used in this case.
+///
+/// ```rust
+/// # use autumn::prelude::*;
+/// fn alphabet(source: &str, location: Span) -> ParseResult<String, &'static str> {
+///     "abcde"
+///         .and(digit)
+///         .and_then(|text| {
+///             let text = text.to_string();
+///             if text.ends_with("0") {
+///                 throw(text, "Token must not end with 0")
+///             } else {
+///                 value(text)
+///             }
+///         })
+///         .catch()
+///         .parse(source, location)
+/// }
+/// ```
 pub trait BoxedParserExt<'p, T, E>: Parser<T, E> + Sized + 'p {
+
+    /// Convert a parser into a dynamically dispatched parser
+    ///
+    /// ```rust
+    /// # use autumn::prelude::*;
+    /// fn parser() -> impl Parser<List<char>> {
+    ///     "a".and("b".or("c")).boxed()
+    /// }
+    /// ```
     fn boxed(self) -> Boxed<dyn Parser<T, E> + 'p> {
         Boxed::new(self)
     }

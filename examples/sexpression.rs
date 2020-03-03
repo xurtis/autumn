@@ -26,7 +26,7 @@ fn main() -> Result<()> {
         let result = sexpression.drop('\n').end().parse(&expr, new_location());
         if result.is_success() {
             for result in result.values() {
-                println!("{}", result.inner_ref());
+                println!("{}", result);
             }
         } else {
             println!("Err: Invalid S-express: {}", expr);
@@ -165,7 +165,7 @@ mod test {
         println!();
         for expression in S_EXPRESSIONS {
             println!("\n{:#?}", expression);
-            let result = sexpression.end().parse(expression, new_location());
+            let result = parse(sexpression, expression);
             assert!(result.is_success());
             for value in result.values() {
                 println!("{}", *value);

@@ -23,10 +23,10 @@ fn main() -> Result<()> {
             break;
         }
 
-        let result = expression.parse(&expr, new_location());
+        let result = parse(expression, &expr);
         if result.is_success() {
             for result in result.values() {
-                println!(" = {}", result.inner_ref());
+                println!(" = {}", result);
             }
         } else {
             for error in result.cloned_errors() {

@@ -44,20 +44,19 @@
 //!     identifier_prefix
 //!         .and(identifier_body)
 //!         .map(|s| s.to_string())
-//!         .end()
 //!         .parse(source, location)
 //! }
 //! # for code in &["hello", "world", "_underscore", "_with_numb3r5"] {
 //! #     // Parse each string as a single identifier, ensure the whole string is consumed
-//! #     let result = identifier.end().parse(code, new_location());
+//! #     let result = parse(identifier, code);
 //! #     assert!(result.is_success());
 //! #     assert!(result.single_parse());
 //! #     let value = result.values().next().unwrap();
-//! #     assert_eq!(value.inner_ref(), code);
+//! #     assert_eq!(value, code);
 //! # }
 //! # for code in &["12l", "5.3", "function(12)", "1 + 2"] {
 //! #     // Parse each string as a single identifier, ensure the whole string is consumed
-//! #     let result = identifier.end().parse(code, new_location());
+//! #     let result = parse(identifier, code);
 //! #     assert!(!result.is_success());
 //! # }
 //! ```
@@ -140,7 +139,7 @@
 //! ```rust
 //! # use autumn::prelude::*;
 //! /// Parses the first 5 letters of the alphabet in order
-//! fn alphabet_parse(source: &str, location: Span) -> ParseResult<List<char>, &'static str> {
+//! fn alphabet_parse() -> impl Parser<List<char>, &'static str> {
 //!     "abcde"
 //!         .on_none(
 //!             alphabetic
@@ -148,7 +147,6 @@
 //!                 .maybe()
 //!                 .and_then(|text| error(text, "Not in alphabetical order"))
 //!         )
-//!         .parse(source, location)
 //! }
 //! ```
 //!
@@ -184,7 +182,7 @@
 //! ```rust
 //! # use autumn::prelude::*;
 //! /// Parses the first 5 letters of the alphabet in order
-//! fn alphabet_parse(source: &str, location: Span) -> ParseResult<List<char>, &'static str> {
+//! fn alphabet_parse() -> impl Parser<List<char>, &'static str> {
 //!     "abcde"
 //!         .on_none(
 //!             alphabetic
@@ -193,7 +191,6 @@
 //!                 .and_then(|text| throw(text, "Not in alphabetical order"))
 //!         )
 //!         .catch()
-//!         .parse(source, location)
 //! }
 //! ```
 
@@ -210,6 +207,13 @@ pub mod prelude {
     pub use crate::combinators::{BoxedParserExt, ListParserExt, ParserExt};
     pub use crate::parsers::*;
     pub use crate::{new_location, path_location, List, Meta, ParseResult, Parser, Span};
+    pub use crate::parse;
+}
+
+/// Parse a source text using a given parser
+pub fn parse<T, E, P: Parser<T, E>>(parser: P, source: &str) -> ParseResult<T, E> {
+    use combinators::ParserExt;
+    parser.end().parse(source, new_location())
 }
 
 #[cfg(test)]
@@ -243,7 +247,7 @@ mod tests {
     fn simple_tokens() {
         for valid_token in VALID_TOKENS {
             println!("\n{:#?}", valid_token);
-            let result = token.end().parse(valid_token, new_location());
+            let result = parse(token, valid_token);
             assert!(result.is_success());
             for value in result.values() {
                 println!("{:?}", *value);
@@ -263,7 +267,6 @@ mod tests {
             .and(space.skip(token_list).multiple().maybe())
             .maybe()
             .drop(space.maybe())
-            .end()
             .parse(source, location)
     }
 
@@ -273,7 +276,7 @@ mod tests {
 
         for token_sequence in VALID_SEQUENCES {
             println!("\n{:#?}", token_sequence);
-            let result = sequence(token_sequence, new_location());
+            let result = parse(sequence, token_sequence);
             assert!(result.is_success());
             for value in result.values() {
                 println!("{:?}", *value);

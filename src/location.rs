@@ -80,7 +80,7 @@ impl Location {
 
     /// Bind to an object
     pub fn bind<T>(self, object: T) -> Meta<T, Self> {
-        Meta::new(object, self)
+        Meta { inner: object, location: self }
     }
 }
 
@@ -106,21 +106,11 @@ impl Span {
         &self.start
     }
 
-    /// Get a mutable reference to the start
-    pub fn start_mut(&mut self) -> &mut Location {
-        &mut self.start
-    }
-
     /// Get the end of the span
     ///
     /// The end itself is not part of the span
     pub fn end(&self) -> &Location {
         &self.end
-    }
-
-    /// Get a mutable reference to the end
-    pub fn end_mut(&mut self) -> &mut Location {
-        &mut self.end
     }
 
     /// Get the number of characters between the start and the end
@@ -135,12 +125,12 @@ impl Span {
 
     /// Move the start position of a span
     pub fn move_start(&mut self, new_start: Location) {
-        *self.start_mut() = new_start;
+        self.start = new_start;
     }
 
     /// Move the end position of a span
     pub fn move_end(&mut self, new_end: Location) {
-        *self.end_mut() = new_end;
+        self.end = new_end;
     }
 
     /// Create a span following the given span
@@ -159,12 +149,12 @@ impl Span {
 
     /// Advance the end of a span by adding a character
     pub fn after(&mut self, next_character: char) {
-        self.end_mut().after(next_character);
+        self.end.after(next_character);
     }
 
     /// Bind to an object
     pub fn bind<T>(self, object: T) -> Meta<T, Self> {
-        Meta::new(object, self)
+        Meta { inner: object, location: self }
     }
 }
 
@@ -216,7 +206,10 @@ impl<P, I> DerefMut for FileSource<P, I> {
     }
 }
 
-/// Structure to tag an object with a given location
+/// Structure to tag an object with a positional information
+///
+/// This can be used to associate any value with a particular [`Location`](struct.Location.html) or
+/// [`Span`](struct.Span.html) within a source text.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Meta<T, I> {
     inner: T,
@@ -224,23 +217,27 @@ pub struct Meta<T, I> {
 }
 
 impl<T, I> Meta<T, I> {
-    /// Bind an object to a location
-    pub fn new(inner: T, location: I) -> Self {
-        Meta { inner, location }
-    }
-
+    /// Unwrap the meta and return only the inner value
     pub fn inner(self) -> T {
         self.inner
     }
 
+    /// Get a reference to the inner value
     pub fn inner_ref(&self) -> &T {
         &self.inner
     }
 
+    /// Get a reference to the inner value
+    pub fn inner_mut(&mut self) -> &mut T {
+        &mut self.inner
+    }
+
+    /// Split a meta into a separate value and location
     pub fn split(self) -> (T, I) {
         (self.inner, self.location)
     }
 
+    /// Map the value within the meta
     pub fn map<A>(self, mut map: impl FnMut(T) -> A) -> Meta<A, I> {
         let Meta { inner, location } = self;
         let inner = map(inner);
@@ -249,6 +246,7 @@ impl<T, I> Meta<T, I> {
 }
 
 impl<T, I: Clone> Meta<T, I> {
+    /// Create a new meta referencing the original value
     pub fn as_ref(&self) -> Meta<&T, I> {
         Meta {
             inner: &self.inner,
@@ -256,6 +254,7 @@ impl<T, I: Clone> Meta<T, I> {
         }
     }
 
+    /// Create a new meta mutably referencing the original value
     pub fn as_mut(&mut self) -> Meta<&mut T, I> {
         Meta {
             inner: &mut self.inner,
@@ -292,6 +291,8 @@ impl<T, I> DerefMut for Meta<T, I> {
 }
 
 impl<T> Meta<T, Location> {
+    /// Turn a meta referring to a single [`Location`](struct.Location.html) to an empty
+    /// [`Span`](struct.Span.html) starting at the same location.
     pub fn span(self) -> Meta<T, Span> {
         Meta {
             location: self.location.span(),
