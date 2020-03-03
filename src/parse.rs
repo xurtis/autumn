@@ -59,6 +59,22 @@ impl<'s, T, E> ParseResult<'s, T, E> {
         success.into_iter()
     }
 
+    /// Produce an iterator over references to all errors from all complete parses
+    pub fn errors<'r>(&'r self) -> impl Iterator<Item = Meta<impl AsRef<E>, Span>> + 'r {
+        self.results
+            .iter()
+            .flat_map(InnerResult::errors)
+            .map(|error| error.as_ref().clone())
+    }
+
+    /// Produce an iterator over references to all uncaught exceptions from all complete parses
+    pub fn exceptions<'r>(&'r self) -> impl Iterator<Item = Meta<impl AsRef<E>, Span>> + 'r {
+        self.results
+            .iter()
+            .flat_map(InnerResult::exceptions)
+            .map(|error| error.as_ref().clone())
+    }
+
     /// Check if a parse was successful.
     ///
     /// A parse is considered successful if there was at least one execution of the parse over the
@@ -144,24 +160,6 @@ impl<'s, T, E> ParseResult<'s, T, E> {
             failure,
             results,
         }
-    }
-}
-
-impl<'s, T, E> ParseResult<'s, T, E> {
-    /// Produce an iterator over references to all errors from all complete parses
-    pub fn errors<'r>(&'r self) -> impl Iterator<Item = Meta<impl AsRef<E>, Span>> + 'r {
-        self.results
-            .iter()
-            .flat_map(InnerResult::errors)
-            .map(|error| error.as_ref().clone())
-    }
-
-    /// Produce an iterator over references to all uncaught exceptions from all complete parses
-    pub fn exceptions<'r>(&'r self) -> impl Iterator<Item = Meta<impl AsRef<E>, Span>> + 'r {
-        self.results
-            .iter()
-            .flat_map(InnerResult::exceptions)
-            .map(|error| error.as_ref().clone())
     }
 
     pub(crate) fn meta(self) -> ParseResult<'s, Meta<T, Span>, E> {
