@@ -102,7 +102,7 @@
 //!     closure(move |source, location| {
 //!         if count > 0 {
 //!             character
-//!                 .map(List::single)
+//!                 .to_list()
 //!                 .and(counted(character, count - 1))
 //!                 .parse(source, location)
 //!         } else {
@@ -137,7 +137,7 @@
 //!         .on_none(
 //!             character
 //!                 .condition(|c| !c.is_whitespace())
-//!                 .map(List::single)
+//!                 .to_list()
 //!                 .multiple()
 //!                 .map(|s| s.to_string())
 //!                 .and_then(|identifier| throw(None, InvalidIdentifier(identifier)))
@@ -272,7 +272,7 @@ pub fn empty<T, E>(source: &str, location: Span) -> ParseResult<List<T>, E> {
 ///     closure(move |source, location| {
 ///         if count > 0 {
 ///             character
-///                 .map(List::single)
+///                 .to_list()
 ///                 .and(counted(character, count - 1))
 ///                 .parse(source, location)
 ///         } else {
@@ -318,7 +318,7 @@ fn char_condition<'s, E>(
 ) -> ParseResult<'s, List<char>, E> {
     character
         .condition(|c| condition(*c))
-        .map(List::single)
+        .to_list()
         .parse(source, location)
 }
 
@@ -379,7 +379,7 @@ fn exact_rec<'s, E>(
 ) -> ParseResult<'s, List<char>, E> {
     if let Some(next) = exact.chars().next() {
         let remaining = &exact[next.len_utf8()..];
-        next.map(List::single)
+        next.to_list()
             .parse(source, location)
             .and_then(&|parsed, source, location| {
                 exact_rec::<E>(remaining, source, location)

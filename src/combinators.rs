@@ -76,7 +76,7 @@
 //!         .on_none(
 //!             character
 //!                 .condition(|c| !c.is_whitespace())
-//!                 .map(List::single)
+//!                 .to_list()
 //!                 .multiple()
 //!                 .map(|s| s.to_string())
 //!                 .and_then(|identifier| throw(None, InvalidIdentifier(identifier)))
@@ -154,12 +154,12 @@
 //!         .skip(
 //!             integer
 //!                 .meta()
-//!                 .map(List::single)
+//!                 .to_list()
 //!                 .and(
 //!                     space.maybe()
 //!                         .and(",")
 //!                         .and(space.maybe())
-//!                         .skip(integer.meta().map(List::single))
+//!                         .skip(integer.meta().to_list())
 //!                         .multiple()
 //!                         .maybe()
 //!                 )
@@ -366,7 +366,7 @@ pub trait ParserExt<T, E>: Parser<T, E> + Sized {
     /// fn single_line() -> impl Parser<String> {
     ///     character
     ///         .condition(|c| *c != '\n')
-    ///         .map(List::single)
+    ///         .to_list()
     ///         .drop("\n")
     ///         .map(|s| s.to_string())
     ///         .end()
@@ -397,6 +397,24 @@ pub trait ParserExt<T, E>: Parser<T, E> + Sized {
     /// ```
     fn meta(self) -> MetaMap<Self, E> {
         MetaMap(self, PhantomData)
+    }
+
+    /// Wrap the value of a parser in a list
+    ///
+    /// ```rust
+    /// # use autumn::prelude::*;
+    /// use std::str::FromStr;
+    /// fn parse_integers() -> impl Parser<List<i32>> {
+    ///     "-".maybe()
+    ///         .and(digit.multiple())
+    ///         .map(|s| s.to_string())
+    ///         .map(|s| FromStr::from_str(&s).unwrap())
+    ///         .to_list()
+    ///         .multiple()
+    /// }
+    /// ```
+    fn to_list(self) -> ListMap<Self, E> {
+        ListMap(self, PhantomData)
     }
 }
 
@@ -783,5 +801,15 @@ pub struct MetaMap<P, E>(P, PhantomData<E>);
 impl<T, E, P: Parser<T, E>> Parser<Meta<T, Span>, E> for MetaMap<P, E> {
     fn parse<'s>(&self, source: &'s str, location: Span) -> ParseResult<'s, Meta<T, Span>, E> {
         self.0.parse(source, location).meta()
+    }
+}
+
+/// The result of the [`to_list`](trait.ParserExt.html#method.to_list) function in the
+/// [`ParserExt`](trait.ParserExt.html) trait
+pub struct ListMap<P, E>(P, PhantomData<E>);
+
+impl<T, E, P: Parser<T, E>> Parser<List<T>, E> for ListMap<P, E> {
+    fn parse<'s>(&self, source: &'s str, location: Span) -> ParseResult<'s, List<T>, E> {
+        self.0.parse(source, location).map(&List::single)
     }
 }

@@ -260,7 +260,7 @@ mod tests {
 
     fn sequence(source: &str, location: Span) -> ParseResult<List<String>> {
         fn token_list(source: &str, location: Span) -> ParseResult<List<String>> {
-            token(source, location).map(&List::single)
+            token.to_list().parse(source, location)
         }
 
         token_list
