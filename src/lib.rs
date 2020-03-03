@@ -205,9 +205,9 @@ pub use parse::{List, ParseResult, Parser};
 /// Common items from the library used when building parsers
 pub mod prelude {
     pub use crate::combinators::{BoxedParserExt, ListParserExt, ParserExt, TextParserExt};
+    pub use crate::parse;
     pub use crate::parsers::*;
     pub use crate::{new_location, path_location, List, Meta, ParseResult, Parser, Span};
-    pub use crate::parse;
 }
 
 /// Parse a source text using a given parser

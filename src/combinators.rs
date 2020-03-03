@@ -458,7 +458,6 @@ impl<T, E, P: Parser<T, E>> ParserExt<T, E> for P {}
 /// they were added. The `ToString` implementation for [`List<char>`](../struct.List.html) does
 /// this automatically.
 pub trait ListParserExt<T, E>: Parser<List<T>, E> + Sized {
-
     /// Repeat a parser one or more times
     ///
     /// ```rust
@@ -530,7 +529,6 @@ impl<T, E, P: Parser<List<T>, E>> ListParserExt<T, E> for P {}
 /// }
 /// ```
 pub trait BoxedParserExt<'p, T, E>: Parser<T, E> + Sized + 'p {
-
     /// Convert a parser into a dynamically dispatched parser
     ///
     /// ```rust

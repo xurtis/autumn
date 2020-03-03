@@ -80,7 +80,10 @@ impl Location {
 
     /// Bind to an object
     pub fn bind<T>(self, object: T) -> Meta<T, Self> {
-        Meta { inner: object, location: self }
+        Meta {
+            inner: object,
+            location: self,
+        }
     }
 }
 
@@ -154,7 +157,10 @@ impl Span {
 
     /// Bind to an object
     pub fn bind<T>(self, object: T) -> Meta<T, Self> {
-        Meta { inner: object, location: self }
+        Meta {
+            inner: object,
+            location: self,
+        }
     }
 }
 
