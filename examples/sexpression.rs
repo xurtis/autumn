@@ -42,7 +42,7 @@ enum SExpression {
     Integer(i32),
     Float(f32),
     String(String),
-    List(List<Meta<SExpression, Span>>),
+    List(Vec<Meta<SExpression, Span>>),
 }
 
 impl fmt::Display for SExpression {
@@ -69,22 +69,22 @@ impl fmt::Display for SExpression {
     }
 }
 
-fn expr_space(source: &str, location: Span) -> ParseResult<List<char>> {
+fn expr_space(source: &str, location: Span) -> ParseResult<Span> {
     whitespace.multiple().parse(source, location)
 }
 
-fn atom_prefix() -> impl Parser<List<char>> {
+fn atom_prefix() -> impl Parser<Span> {
     alphabetic.or("_".or("-"))
 }
 
-fn atom_char() -> impl Parser<List<char>> {
+fn atom_char() -> impl Parser<Span> {
     atom_prefix().or(digit)
 }
 
 fn atom(source: &str, location: Span) -> ParseResult<SExpression> {
     atom_prefix()
         .and(atom_char().multiple().maybe())
-        .to_string()
+        .copy_string()
         .map(SExpression::Atom)
         .parse(source, location)
 }
@@ -92,7 +92,8 @@ fn atom(source: &str, location: Span) -> ParseResult<SExpression> {
 fn integer(source: &str, location: Span) -> ParseResult<SExpression> {
     digit
         .multiple()
-        .map(|i| FromStr::from_str(&i.to_string()).unwrap())
+        .copy_string()
+        .map(|i| FromStr::from_str(&i).unwrap())
         .map(SExpression::Integer)
         .parse(source, location)
 }
@@ -101,7 +102,8 @@ fn float(source: &str, location: Span) -> ParseResult<SExpression> {
     digit
         .multiple()
         .and(".".and(digit.multiple().maybe()))
-        .map(|i| FromStr::from_str(&i.to_string()).unwrap())
+        .copy_string()
+        .map(|i| FromStr::from_str(&i).unwrap())
         .map(SExpression::Float)
         .parse(source, location)
 }
@@ -109,20 +111,20 @@ fn float(source: &str, location: Span) -> ParseResult<SExpression> {
 fn string(source: &str, location: Span) -> ParseResult<SExpression> {
     "\"".skip(
         any_character
-            .condition(|c| c.clone().all(|c| *c != '\"'))
+            .str_condition(|c| c.chars().all(|c| c != '\"'))
             .or("\\".and("\""))
             .multiple()
             .maybe()
             .drop("\""),
     )
-    .to_string()
+    .copy_string()
     .map(SExpression::String)
     .parse(source, location)
 }
 
 fn list(source: &str, location: Span) -> ParseResult<SExpression> {
-    fn expression_list(source: &str, location: Span) -> ParseResult<List<Meta<SExpression, Span>>> {
-        sexpression.meta().map(List::single).parse(source, location)
+    fn expression_list(source: &str, location: Span) -> ParseResult<Vec<Meta<SExpression, Span>>> {
+        sexpression.meta().to_list().parse(source, location)
     }
 
     "(".and(expr_space.maybe())
@@ -133,7 +135,6 @@ fn list(source: &str, location: Span) -> ParseResult<SExpression> {
                 .maybe()
                 .drop(expr_space.maybe().and(")")),
         )
-        .map(|l| l.reverse())
         .map(SExpression::List)
         .parse(source, location)
 }

@@ -1,4 +1,6 @@
-use crate::location::{Meta, Span};
+use crate::location::{new_location, Meta, Span};
+use std::collections::{BTreeSet, HashSet, LinkedList};
+use std::hash::Hash;
 use std::rc::Rc;
 
 /// A parser takes an input source and produces an array of potential tagged values and an array of
@@ -322,7 +324,7 @@ impl<'s, T, E> InnerResult<'s, T, E> {
             source,
             location,
         } = self;
-        let errors = errors.concat(&exceptions);
+        let errors = errors.concat(exceptions);
         let exceptions = List::new();
         InnerResult {
             value,
@@ -451,7 +453,7 @@ impl<'s, T, E> InnerResult<'s, T, E> {
 
         // Move the start of all the uncaught exceptions
         let exceptions: List<_> = exceptions
-            .concat(&existing_exceptions)
+            .concat(existing_exceptions)
             .map(|meta| {
                 let (exception, mut location) = meta.as_ref().clone().split();
                 location.move_start(start.start().clone());
@@ -460,7 +462,7 @@ impl<'s, T, E> InnerResult<'s, T, E> {
             .collect();
 
         // Concatenate all of the errors
-        let errors = existing_errors.concat(&errors);
+        let errors = existing_errors.concat(errors);
 
         InnerResult {
             value,
@@ -469,6 +471,123 @@ impl<'s, T, E> InnerResult<'s, T, E> {
             source,
             location,
         }
+    }
+}
+
+/// Containers that can be concatenated with each other
+pub trait Concat: Sized {
+    /// Create an empty container
+    fn empty() -> Self;
+
+    /// Create an empty container at a specific location in the source
+    #[allow(unused)]
+    fn empty_at(location: Span) -> Self {
+        Self::empty()
+    }
+
+    /// Concatenate the contents of two containers together
+    fn concat(self, other: Self) -> Self;
+}
+
+impl<T> Concat for Vec<T> {
+    fn empty() -> Self {
+        Vec::new()
+    }
+
+    fn concat(mut self, mut other: Self) -> Self {
+        self.append(&mut other);
+        self
+    }
+}
+
+impl<T> Concat for LinkedList<T> {
+    fn empty() -> Self {
+        LinkedList::new()
+    }
+
+    fn concat(mut self, mut other: Self) -> Self {
+        self.append(&mut other);
+        self
+    }
+}
+
+impl<T: Hash + Eq> Concat for HashSet<T> {
+    fn empty() -> Self {
+        HashSet::new()
+    }
+
+    fn concat(self, other: Self) -> Self {
+        self.into_iter().chain(other.into_iter()).collect()
+    }
+}
+
+impl<T: Ord> Concat for BTreeSet<T> {
+    fn empty() -> Self {
+        BTreeSet::new()
+    }
+
+    fn concat(self, other: Self) -> Self {
+        self.into_iter().chain(other.into_iter()).collect()
+    }
+}
+
+impl Concat for Span {
+    fn empty() -> Self {
+        new_location()
+    }
+
+    fn empty_at(location: Span) -> Self {
+        location
+    }
+
+    fn concat(self, other: Self) -> Self {
+        self.join(other)
+    }
+}
+
+/// Containers that can be constructed with a single element
+pub trait Single {
+    type Item;
+
+    /// Encapsulate the single item in the container
+    fn single(item: Self::Item) -> Self;
+}
+
+impl<T> Single for Vec<T> {
+    type Item = T;
+
+    fn single(item: Self::Item) -> Self {
+        vec![item]
+    }
+}
+
+impl<T> Single for LinkedList<T> {
+    type Item = T;
+
+    fn single(item: Self::Item) -> Self {
+        let mut list = LinkedList::new();
+        list.push_back(item);
+        list
+    }
+}
+
+impl<T: Hash + Eq> Single for HashSet<T> {
+    type Item = T;
+
+    fn single(item: Self::Item) -> Self {
+        let mut set = HashSet::new();
+        set.insert(item);
+        set
+    }
+}
+
+impl<T: Ord> Single for BTreeSet<T> {
+    type Item = T;
+
+    fn single(item: Self::Item) -> Self {
+        let mut set = BTreeSet::new();
+        set.insert(item);
+        set
     }
 }
 
@@ -489,9 +608,9 @@ impl<'s, T, E> InnerResult<'s, T, E> {
 /// ```rust
 /// # use autumn::List;
 /// let values = &[0, 1, 2, 3, 4, 5, 6, 7, 8];
-/// let listA = values[1..5].iter().fold(List::single(0), |list, value| list.push(*value));
-/// let listB = values[5..9].iter().fold(List::new(), |list, value| list.push(*value));
-/// let joined = listA.concat(&listB);
+/// let list_a = values[1..5].iter().fold(List::single(0), |list, value| list.push(*value));
+/// let list_b = values[5..9].iter().fold(List::new(), |list, value| list.push(*value));
+/// let joined = list_a.concat(&list_b);
 ///
 /// for (list_value, array_value) in joined.reverse().zip(values.iter()) {
 ///     assert_eq!(*list_value, *array_value);
@@ -576,16 +695,6 @@ impl<T> Clone for List<T> {
     }
 }
 
-impl ToString for List<char> {
-    fn to_string(&self) -> String {
-        let mut string = String::with_capacity(self.1);
-        for character in self.reverse() {
-            string.push(*character);
-        }
-        string
-    }
-}
-
 impl<T> Iterator for List<T> {
     type Item = Rc<T>;
 
@@ -616,6 +725,24 @@ impl<T> ::std::iter::FromIterator<T> for List<T> {
             list = list.push(item);
         }
         list
+    }
+}
+
+impl<T> Concat for List<T> {
+    fn empty() -> Self {
+        List::new()
+    }
+
+    fn concat(self, other: Self) -> Self {
+        List::concat(&self, &other)
+    }
+}
+
+impl<T> Single for List<T> {
+    type Item = T;
+
+    fn single(item: Self::Item) -> Self {
+        List::single(item)
     }
 }
 

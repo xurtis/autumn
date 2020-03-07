@@ -7,7 +7,7 @@
 //! =====================
 //!
 //! The following parsers are provided that parse a single character matching a certain category of
-//! characters. They all produce a [`List<char>`](../struct.List.html) of the character they match.
+//! characters. They all produce a [`Span`](../struct.Span.html) of the character they match.
 //!
 //!  * [`any_character`](fn.any_character.html) will match any Unicode character.
 //!  * [`alphabetic`](fn.alphabetic.html) will match an ASCII alphabetic character.
@@ -26,13 +26,13 @@
 //!     alphabetic
 //!         .or("_")
 //!         .and(alphanumeric.or("_").multiple().maybe())
-//!         .to_string()
+//!         .copy_string()
 //!         .parse(source, location)
 //! }
 //!
 //! /// Parses integers
 //! fn integer(source: &str, location: Span) -> ParseResult<String> {
-//!     digit.multiple().to_string().parse(source, location)
+//!     digit.multiple().copy_string().parse(source, location)
 //! }
 //!
 //! /// Parses float literals
@@ -41,7 +41,7 @@
 //!         .multiple()
 //!         .and(".".and(digit.multiple()).maybe())
 //!         .or(".".and(digit.multiple()))
-//!         .to_string()
+//!         .copy_string()
 //!         .parse(source, location)
 //! }
 //! ```
@@ -51,10 +51,10 @@
 //!
 //! To parse a specific literal character or string, the corresponding `&str` or `String`
 //! can be used directly as a parser. These types will all parse themselves from the input and
-//! produce a [`List<char>`](../struct.List.html) corresponding to the matched characters.
+//! produce a [`Span`](../struct.Span.html) corresponding to the matched characters.
 //!
 //! The [`empty`](fn.empty.html) parser is also provided to parse no characters and produce an
-//! empty [`List<char>`](../struct.List.html).
+//! empty [`Concat`](../trait.Concat.html).
 //!
 //! ```rust
 //! # use autumn::prelude::*;
@@ -66,7 +66,7 @@
 //!         .or("static")
 //!         .or("typedef")
 //!         .or("_Thread_local")
-//!         .to_string()
+//!         .copy_string()
 //!         .parse(source, location)
 //! }
 //! ```
@@ -75,7 +75,7 @@
 //! ----------------------------------------------------
 //!
 //! The [`character`](fn.character.html) parser consumes any Unicode character and
-//! produces a `char` rather than a [`List<char>`](../struct.List.html). The
+//! produces a `char` rather than a [`Span`](../struct.Span.html). The
 //! [`condition`](../combinators/trait.ParserExt.html#method.condition) combinator can be used to
 //! restrict which character is matched.
 //!
@@ -98,11 +98,10 @@
 //! ```rust
 //! # use autumn::prelude::*;
 //! /// Parse an exact number of a specific character
-//! fn counted(character: char, count: usize) -> impl Parser<List<char>> {
+//! fn counted(character: char, count: usize) -> impl Parser<Span> {
 //!     closure(move |source, location| {
 //!         if count > 0 {
-//!             character
-//!                 .to_list()
+//!             any_character
 //!                 .and(counted(character, count - 1))
 //!                 .parse(source, location)
 //!         } else {
@@ -133,14 +132,13 @@
 //!     alphabetic
 //!         .or("_")
 //!         .and(alphanumeric.or("_").multiple())
-//!         .to_string()
+//!         .copy_string()
 //!         .map(Some)
 //!         .on_none(
-//!             character
-//!                 .condition(|c| !c.is_whitespace())
-//!                 .to_list()
+//!             any_character
+//!                 .str_condition(|c| !c.chars().any(char::is_whitespace))
 //!                 .multiple()
-//!                 .to_string()
+//!                 .copy_string()
 //!                 .and_then(|identifier| throw(None, InvalidIdentifier(identifier)))
 //!         )
 //!         .catch()
@@ -148,9 +146,9 @@
 //! }
 //! ```
 
-use crate::combinators::{Boxed, BoxedParserExt, ListParserExt, ParserExt};
+use crate::combinators::{Boxed, BoxedParserExt, ListParserExt, ParserExt, TextParserExt};
 use crate::location::Span;
-use crate::{List, ParseResult, Parser};
+use crate::{Concat, ParseResult, Parser};
 
 /// Creates a parser that consumes no input and produces the given value as the result of parsing
 ///
@@ -164,8 +162,8 @@ use crate::{List, ParseResult, Parser};
 /// fn alphabet(source: &str, location: Span) -> ParseResult<String, &'static str> {
 ///     "abcde"
 ///         .and(digit)
+///         .copy_string()
 ///         .and_then(|text| {
-///             let text = text.to_string();
 ///             if text.ends_with("0") {
 ///                 error(text, "Token must not end with 0")
 ///             } else {
@@ -191,8 +189,8 @@ pub fn value<'p, T: Clone + 'p, E: 'p>(value: T) -> Boxed<dyn Parser<T, E> + 'p>
 /// fn alphabet(source: &str, location: Span) -> ParseResult<String, &'static str> {
 ///     "abcde"
 ///         .and(digit)
+///         .copy_string()
 ///         .and_then(|text| {
-///             let text = text.to_string();
 ///             if text.ends_with("0") {
 ///                 error(text, "Token must not end with 0")
 ///             } else {
@@ -220,8 +218,8 @@ pub fn error<'p, T: Clone + 'p, E: Clone + 'p>(value: T, error: E) -> Boxed<dyn 
 /// fn alphabet(source: &str, location: Span) -> ParseResult<String, &'static str> {
 ///     "abcde"
 ///         .and(digit)
+///         .copy_string()
 ///         .and_then(|text| {
-///             let text = text.to_string();
 ///             if text.ends_with("0") {
 ///                 throw(text, "Token must not end with 0")
 ///             } else {
@@ -254,9 +252,9 @@ fn exception<'s, T, E>(
     ParseResult::exception(value, error, source, location)
 }
 
-/// A parser that consumes no input and produces an empty [`List<char>`](../struct.List.html)
-pub fn empty<T, E>(source: &str, location: Span) -> ParseResult<List<T>, E> {
-    ParseResult::success(List::new(), source, location)
+/// A parser that consumes no input and produces an empty [`Concat`](../trait.Concat.html)
+pub fn empty<T: Concat, E>(source: &str, location: Span) -> ParseResult<T, E> {
+    ParseResult::success(T::empty_at(location), source, location)
 }
 
 /// Converts a parser-like closure into an actual parser
@@ -269,11 +267,10 @@ pub fn empty<T, E>(source: &str, location: Span) -> ParseResult<List<T>, E> {
 /// ```rust
 /// # use autumn::prelude::*;
 /// /// Parse an exact number of a specific character
-/// fn counted(character: char, count: usize) -> impl Parser<List<char>> {
+/// fn counted(character: char, count: usize) -> impl Parser<Span> {
 ///     closure(move |source, location| {
 ///         if count > 0 {
-///             character
-///                 .to_list()
+///             any_character
 ///                 .and(counted(character, count - 1))
 ///                 .parse(source, location)
 ///         } else {
@@ -290,13 +287,13 @@ where
 }
 
 /// Parsers a single character from the input as an element of a
-/// [`List<char>`](../struct.List.html)
+/// [`Span`](../struct.Span.html)
 ///
 /// See [specifying characters](index.html#specifying-characters).
-pub fn any_character<E>(source: &str, mut location: Span) -> ParseResult<List<char>, E> {
+pub fn any_character<'s, E>(source: &'s str, mut location: Span) -> ParseResult<'s, Span, E> {
     if let Some((_, next)) = source.char_indices().next() {
         location.after(next);
-        ParseResult::success(List::new().push(next), &source[next.len_utf8()..], location)
+        ParseResult::success(location, &source[next.len_utf8()..], location)
     } else {
         ParseResult::none(location)
     }
@@ -316,10 +313,9 @@ fn char_condition<'s, E>(
     condition: &impl Fn(char) -> bool,
     source: &'s str,
     location: Span,
-) -> ParseResult<'s, List<char>, E> {
-    character
-        .condition(|c| condition(*c))
-        .to_list()
+) -> ParseResult<'s, Span, E> {
+    any_character
+        .str_condition(|s| s.chars().all(condition))
         .parse(source, location)
 }
 
@@ -341,70 +337,68 @@ impl<E> Parser<char, E> for &char {
 /// Parses a single ASCII digit character from the input
 ///
 /// See [specifying characters](index.html#specifying-characters).
-pub fn digit<E>(source: &str, location: Span) -> ParseResult<List<char>, E> {
+pub fn digit<E>(source: &str, location: Span) -> ParseResult<Span, E> {
     char_condition(&|c| c.is_ascii_digit(), source, location)
 }
 
 /// Parses a single ASCII alphabetic character from the input
 ///
 /// See [specifying characters](index.html#specifying-characters).
-pub fn alphabetic<E>(source: &str, location: Span) -> ParseResult<List<char>, E> {
+pub fn alphabetic<E>(source: &str, location: Span) -> ParseResult<Span, E> {
     char_condition(&|c| c.is_ascii_alphabetic(), source, location)
 }
 
 /// Parses a single ASCII alphabetic or digit character from the input
 ///
 /// See [specifying characters](index.html#specifying-characters).
-pub fn alphanumeric<E>(source: &str, location: Span) -> ParseResult<List<char>, E> {
+pub fn alphanumeric<E>(source: &str, location: Span) -> ParseResult<Span, E> {
     char_condition(&|c| c.is_ascii_alphanumeric(), source, location)
 }
 
 /// Parses a single Unicode whitespace character from the input
 ///
 /// See [specifying characters](index.html#specifying-characters).
-pub fn whitespace<E>(source: &str, location: Span) -> ParseResult<List<char>, E> {
+pub fn whitespace<E>(source: &str, location: Span) -> ParseResult<Span, E> {
     char_condition(&|c| c.is_whitespace(), source, location)
 }
 
 /// Parses one or more Unicode whitespace characters from the input
 ///
 /// See [specifying characters](index.html#specifying-characters).
-pub fn space<E>(source: &str, location: Span) -> ParseResult<List<char>, E> {
+pub fn space<E>(source: &str, location: Span) -> ParseResult<Span, E> {
     whitespace.multiple().parse(source, location)
 }
 
-fn exact_rec<'s, E>(
-    exact: &str,
-    source: &'s str,
-    location: Span,
-) -> ParseResult<'s, List<char>, E> {
+fn exact_rec<'s, E>(exact: &str, source: &'s str, location: Span) -> ParseResult<'s, Span, E> {
     if let Some(next) = exact.chars().next() {
         let remaining = &exact[next.len_utf8()..];
-        next.to_list()
+        let next = &exact[..next.len_utf8()];
+        any_character
+            .str_condition(|s| s == next)
             .parse(source, location)
             .and_then(&|parsed, source, location| {
                 exact_rec::<E>(remaining, source, location)
-                    .map(&|remaining| parsed.concat(&remaining))
+                    .map(&|remaining| parsed.concat(remaining))
             })
     } else {
         empty.parse(source, location)
     }
 }
 
-impl<E> Parser<List<char>, E> for str {
-    fn parse<'s>(&self, source: &'s str, location: Span) -> ParseResult<'s, List<char>, E> {
+impl<E> Parser<Span, E> for str {
+    fn parse<'s>(&self, source: &'s str, location: Span) -> ParseResult<'s, Span, E> {
         exact_rec(self, source, location)
     }
 }
 
-impl<E> Parser<List<char>, E> for &str {
-    fn parse<'s>(&self, source: &'s str, location: Span) -> ParseResult<'s, List<char>, E> {
+impl<E> Parser<Span, E> for &str {
+    fn parse<'s>(&self, source: &'s str, location: Span) -> ParseResult<'s, Span, E> {
         exact_rec(self, source, location)
     }
 }
 
-impl<E> Parser<List<char>, E> for String {
-    fn parse<'s>(&self, source: &'s str, location: Span) -> ParseResult<'s, List<char>, E> {
+impl<E> Parser<Span, E> for String {
+    fn parse<'s>(&self, source: &'s str, location: Span) -> ParseResult<'s, Span, E> {
         exact_rec(self, source, location)
     }
 }

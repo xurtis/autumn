@@ -22,10 +22,10 @@ pub fn path_location<P: AsRef<Path>>(path: P) -> FileSource<P, Span> {
 ///
 /// This tracks the location in a text source as each character is read. It can also be used to
 /// present a human-readable form indication where in the source the character is.
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Location {
-    character: usize,
     byte: usize,
+    character: usize,
     row: usize,
     column: usize,
 }
@@ -91,7 +91,7 @@ impl Location {
 ///
 /// This tracks a span of characters from a text source. It can also be used to present
 /// a human-readable location of the range in the source.
-#[derive(Default, Debug, Clone, Copy)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Span {
     start: Location,
     end: Location,
@@ -160,6 +160,44 @@ impl Span {
         Meta {
             inner: object,
             location: self,
+        }
+    }
+
+    /// Get the substring related to a span
+    pub fn substr<'s>(&self, source: &'s str) -> &'s str {
+        let start = self.start().byte();
+        let end = self.end().byte();
+        &source[start..end]
+    }
+
+    /// Get the substring related to a span within a given outer span's string
+    pub(crate) fn subslice<'s>(&self, outer: &Self, source: &'s str) -> &'s str {
+        if outer.start().byte() > self.start.byte() {
+            panic!(
+                "Span::subslice cannot be used with {} which is after {}",
+                outer, self
+            );
+        }
+
+        let start = self.start().byte() - outer.start().byte();
+        let end = self.end().byte() - outer.start().byte();
+        &source[start..end]
+    }
+
+    /// Join two adjacent spans together
+    ///
+    /// Panics if the two spans are not adjacent
+    pub(crate) fn join(self, next: Self) -> Self {
+        if self.end() != next.start() {
+            panic!(
+                "Span::concat cannot be used with {} and {} which are not adjacent",
+                self, next
+            );
+        }
+
+        Span {
+            start: *self.start(),
+            end: *next.end(),
         }
     }
 }

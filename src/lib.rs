@@ -30,12 +30,12 @@
 //! ```rust
 //! # use autumn::prelude::*;
 //! /// Parse a single alphabetic character or underscore
-//! fn identifier_prefix(source: &str, location: Span) -> ParseResult<List<char>> {
+//! fn identifier_prefix(source: &str, location: Span) -> ParseResult<Span> {
 //!     alphabetic.or("_").parse(source, location)
 //! }
 //!
 //! /// Parse a zero or more letters, digits, and underscores
-//! fn identifier_body(source: &str, location: Span) -> ParseResult<List<char>> {
+//! fn identifier_body(source: &str, location: Span) -> ParseResult<Span> {
 //!     identifier_prefix.or(digit).multiple().maybe().parse(source, location)
 //! }
 //!
@@ -43,7 +43,7 @@
 //! fn identifier(source: &str, location: Span) -> ParseResult<String> {
 //!     identifier_prefix
 //!         .and(identifier_body)
-//!         .to_string()
+//!         .copy_string()
 //!         .parse(source, location)
 //! }
 //! # for code in &["hello", "world", "_underscore", "_with_numb3r5"] {
@@ -139,7 +139,7 @@
 //! ```rust
 //! # use autumn::prelude::*;
 //! /// Parses the first 5 letters of the alphabet in order
-//! fn alphabet_parse() -> impl Parser<List<char>, &'static str> {
+//! fn alphabet_parse() -> impl Parser<Span, &'static str> {
 //!     "abcde"
 //!         .on_none(
 //!             alphabetic
@@ -182,7 +182,7 @@
 //! ```rust
 //! # use autumn::prelude::*;
 //! /// Parses the first 5 letters of the alphabet in order
-//! fn alphabet_parse() -> impl Parser<List<char>, &'static str> {
+//! fn alphabet_parse() -> impl Parser<Span, &'static str> {
 //!     "abcde"
 //!         .on_none(
 //!             alphabetic
@@ -200,14 +200,14 @@ mod parse;
 pub mod parsers;
 
 pub use location::{new_location, path_location, Location, Meta, Span};
-pub use parse::{List, ParseResult, Parser};
+pub use parse::{Concat, List, ParseResult, Parser, Single};
 
 /// Common items from the library used when building parsers
 pub mod prelude {
     pub use crate::combinators::{BoxedParserExt, ListParserExt, ParserExt, TextParserExt};
     pub use crate::parse;
     pub use crate::parsers::*;
-    pub use crate::{new_location, path_location, List, Meta, ParseResult, Parser, Span};
+    pub use crate::{new_location, path_location, Concat, List, Meta, ParseResult, Parser, Span};
 }
 
 /// Parse a source text using a given parser
@@ -222,22 +222,22 @@ mod tests {
 
     const VALID_TOKENS: &'static [&'static str] = &["A", "ABC", "ABC123", "_ABC123"];
 
-    fn token_prefix(source: &str, location: Span) -> ParseResult<List<char>> {
+    fn token_prefix(source: &str, location: Span) -> ParseResult<Span> {
         alphabetic.or("_").parse(source, location)
     }
 
-    fn token_suffix(source: &str, location: Span) -> ParseResult<List<char>> {
+    fn token_suffix(source: &str, location: Span) -> ParseResult<Span> {
         alphabetic.or(digit).or("_").parse(source, location)
     }
 
     fn token(source: &str, location: Span) -> ParseResult<String> {
         token_prefix
             .and(token_suffix.multiple().maybe())
-            .to_string()
+            .copy_string()
             .parse(source, location)
     }
 
-    fn space(source: &str, location: Span) -> ParseResult<List<char>> {
+    fn space(source: &str, location: Span) -> ParseResult<Span> {
         whitespace
             .and(whitespace.multiple().maybe())
             .parse(source, location)

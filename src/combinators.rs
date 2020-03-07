@@ -7,7 +7,7 @@
 //! =================
 //!
 //! Parsing sequences of characters or values from input is done using parsers that produce a
-//! [`List`](../struct.List.html) and the [`ListParserExt`](trait.ListParserExt.html) trait that is
+//! [`Concat`](../trait.Concat.html) and the [`ListParserExt`](trait.ListParserExt.html) trait that is
 //! implemented for all such parsers.
 //!
 //! The [`ListParserExt`](trait.ListParserExt.html) provides three combinators for manipulating
@@ -26,7 +26,7 @@
 //!     alphabetic
 //!         .or("_")
 //!         .and(alphanumeric.or("_").multiple().maybe())
-//!         .to_string()
+//!         .copy_string()
 //!         .parse(source, location)
 //! }
 //! ```
@@ -36,11 +36,11 @@
 //! `multiple().maybe()` must be used; `maybe().multiple()` can find an infinite number of ways to
 //! apply any parser on even an empty string.
 //!
-//! The characters or values read from input are pushed into the [`List`](../struct.List.html) in
-//! last-in first-out (LIFO) order, so the list must be
-//! [reversed](../struct.List.html#method.reverse) in order to iterate over the items in the order
-//! they were added. The `ToString` implementation for [`List<char>`](../struct.List.html) does
-//! this automatically.
+//! [`and`](trait.ListParserExt.html#method.and) and
+//! [`multiple`](trait.ListParserExt.html#method.multiple) when used with parsers producing a
+//! [`Span`](../struct.Span.html) must ensure that all spans are adjacent (don't use
+//! [`drop`](trait.ParserExt.html#method.drop) or [`skip`](trait.ParserExt.html#method.skip) to
+//! join a pair of [`Span`](../struct.Span.html) results that are not continuous).
 //!
 //! Multiple potential parsers
 //! ==========================
@@ -55,9 +55,9 @@
 //! There are to ways in which the result of a parser can be changed:
 //!
 //!  * the output value and type can be simply mapped to a new value with a new type using the
-//!    [`map`](trait.ListParserExt.html#method.map) operation, and
+//!    [`map`](trait.ParserExt.html#method.map) operation, and
 //!  * changing a successful (or already failing) parse into a potentially failing parse with the
-//!    [`and_then`](trait.ListParserExt.html#method.and_then) operation.
+//!    [`and_then`](trait.ParserExt.html#method.and_then) operation.
 //!
 //! ```rust
 //! # use autumn::prelude::*;
@@ -72,14 +72,13 @@
 //!     alphabetic
 //!         .or("_")
 //!         .and(alphanumeric.or("_").multiple())
-//!         .to_string()
+//!         .copy_string()
 //!         .map(Some)
 //!         .on_none(
-//!             character
-//!                 .condition(|c| !c.is_whitespace())
-//!                 .to_list()
+//!             any_character
+//!                 .str_condition(|s| !s.chars().any(char::is_whitespace))
 //!                 .multiple()
-//!                 .to_string()
+//!                 .copy_string()
 //!                 .and_then(|identifier| throw(None, InvalidIdentifier(identifier)))
 //!         )
 //!         .catch()
@@ -103,14 +102,14 @@
 //! # use autumn::prelude::*;
 //! // Produces "right"
 //! fn right() -> impl Parser<String> {
-//!     "left".skip("right").to_string()
+//!     "left".skip("right").copy_string()
 //! }
 //! let skipped = parse(right(), "leftright");
 //! # assert_eq!(skipped.values().next().unwrap(), "right");
 //!
 //! // Produces "left"
 //! fn left() -> impl Parser<String> {
-//!     "left".drop("right").to_string()
+//!     "left".drop("right").copy_string()
 //! }
 //! let dropped = parse(left(), "leftright");
 //! # assert_eq!(dropped.values().next().unwrap(), "left");
@@ -145,17 +144,17 @@
 //! # use autumn::prelude::*;
 //! /// Parses integers
 //! fn integer(source: &str, location: Span) -> ParseResult<String> {
-//!     digit.multiple().to_string().parse(source, location)
+//!     digit.multiple().copy_string().parse(source, location)
 //! }
 //!
 //! /// Parse a list of integers and get the source location of each integer
-//! fn integer_list(source: &str, location: Span) -> ParseResult<Vec<Meta<String, Span>>> {
+//! fn integer_list(source: &str, location: Span) -> ParseResult<List<Meta<String, Span>>> {
 //!     "["
 //!         .and(space.maybe())
 //!         .skip(
 //!             integer
 //!                 .meta()
-//!                 .to_list()
+//!                 .to_list::<List<_>>()
 //!                 .and(
 //!                     space.maybe()
 //!                         .and(",")
@@ -203,8 +202,9 @@
 //! fn alphabet(source: &str, location: Span) -> ParseResult<String, &'static str> {
 //!     "abcde"
 //!         .and(digit)
+//!         .copy_string()
 //!         .and_then(|text| {
-//!             let text = text.to_string();
+//!             let text = text;
 //!             if text.ends_with("0") {
 //!                 throw(text, "Token must not end with 0")
 //!             } else {
@@ -217,7 +217,7 @@
 //! ```
 
 use crate::location::{Meta, Span};
-use crate::parse::{List, ParseResult, Parser};
+use crate::parse::{Concat, ParseResult, Parser, Single};
 use crate::parsers::empty;
 use std::marker::PhantomData;
 
@@ -228,7 +228,7 @@ pub trait ParserExt<T, E>: Parser<T, E> + Sized {
     /// ```rust
     /// # use autumn::prelude::*;
     /// fn alpha_or_beta() -> impl Parser<String> {
-    ///     "alpha".or("beta").to_string()
+    ///     "alpha".or("beta").copy_string()
     /// }
     /// ```
     fn or<P: Parser<T, E>>(self, other: P) -> Or<Self, P, E> {
@@ -241,7 +241,7 @@ pub trait ParserExt<T, E>: Parser<T, E> + Sized {
     /// # use autumn::prelude::*;
     /// use std::str::FromStr;
     /// fn integer() -> impl Parser<i32> {
-    ///     digit.multiple().map(|i| FromStr::from_str(&i.to_string()).unwrap())
+    ///     digit.multiple().copy_string().map(|i| FromStr::from_str(&i).unwrap())
     /// }
     /// ```
     fn map<V, F: Fn(T) -> V>(self, map: F) -> Map<Self, F, T, E> {
@@ -260,13 +260,13 @@ pub trait ParserExt<T, E>: Parser<T, E> + Sized {
     /// use Token::*;
     ///
     /// fn identifier() -> impl Parser<String> {
-    ///     alphabetic.and(alphanumeric.multiple().maybe()).to_string()
+    ///     alphabetic.and(alphanumeric.multiple().maybe()).copy_string()
     /// }
     ///
     /// fn literal() -> impl Parser<i32> {
     ///     "-".maybe()
     ///         .and(digit.multiple())
-    ///         .to_string()
+    ///         .copy_string()
     ///         .map(|i| FromStr::from_str(&i).unwrap())
     /// }
     ///
@@ -274,7 +274,7 @@ pub trait ParserExt<T, E>: Parser<T, E> + Sized {
     ///     "identifier"
     ///         .or("literal")
     ///         .drop(space)
-    ///         .to_string()
+    ///         .copy_string()
     ///         .and_then(|parsed| {
     ///             match parsed.as_str() {
     ///                 "identifier" => identifier().map(Identifier).boxed(),
@@ -295,7 +295,7 @@ pub trait ParserExt<T, E>: Parser<T, E> + Sized {
     /// fn failing_parser() -> impl Parser<String, &'static str> {
     ///     "hello"
     ///         .and("world")
-    ///         .to_string()
+    ///         .copy_string()
     ///         .on_none(error(String::new(), "Not hello world"))
     ///         .on_failure(error(String::new(), "Caught error"))
     /// }
@@ -311,7 +311,7 @@ pub trait ParserExt<T, E>: Parser<T, E> + Sized {
     /// fn parse_handle_none() -> impl Parser<String, &'static str> {
     ///     "hello"
     ///         .and("world")
-    ///         .to_string()
+    ///         .copy_string()
     ///         .on_none(error(String::new(), "Not hello world"))
     /// }
     /// ```
@@ -324,7 +324,7 @@ pub trait ParserExt<T, E>: Parser<T, E> + Sized {
     /// ```rust
     /// # use autumn::prelude::*;
     /// fn drop_trailing_whitespace() -> impl Parser<String> {
-    ///     "hello".drop(space).to_string()
+    ///     "hello".drop(space).copy_string()
     /// }
     /// ```
     fn drop<V, P: Parser<V, E>>(self, other: P) -> Drop<Self, P, V, E> {
@@ -336,7 +336,7 @@ pub trait ParserExt<T, E>: Parser<T, E> + Sized {
     /// ```rust
     /// # use autumn::prelude::*;
     /// fn drop_leading_whitespace() -> impl Parser<String> {
-    ///     space.skip("hello").to_string()
+    ///     space.skip("hello").copy_string()
     /// }
     /// ```
     fn skip<V, P: Parser<V, E>>(self, keep: P) -> Skip<Self, P, T, E> {
@@ -351,7 +351,8 @@ pub trait ParserExt<T, E>: Parser<T, E> + Sized {
     /// fn foutry_two() -> impl Parser<i32> {
     ///     digit
     ///         .multiple()
-    ///         .map(|i| FromStr::from_str(&i.to_string()).unwrap())
+    ///         .copy_string()
+    ///         .map(|i| FromStr::from_str(&i).unwrap())
     ///         .condition(|i| *i == 42)
     /// }
     /// ```
@@ -364,11 +365,10 @@ pub trait ParserExt<T, E>: Parser<T, E> + Sized {
     /// ```rust
     /// # use autumn::prelude::*;
     /// fn single_line() -> impl Parser<String> {
-    ///     character
-    ///         .condition(|c| *c != '\n')
-    ///         .to_list()
+    ///     any_character
+    ///         .str_condition(|s| !s.chars().any(|c| c == '\n'))
     ///         .drop("\n")
-    ///         .to_string()
+    ///         .copy_string()
     ///         .end()
     /// }
     /// ```
@@ -391,7 +391,7 @@ pub trait ParserExt<T, E>: Parser<T, E> + Sized {
     /// fn identifier_location() -> impl Parser<Meta<String, Span>> {
     ///     alphabetic
     ///         .and(alphanumeric.multiple().maybe())
-    ///         .to_string()
+    ///         .copy_string()
     ///         .meta()
     /// }
     /// ```
@@ -407,24 +407,24 @@ pub trait ParserExt<T, E>: Parser<T, E> + Sized {
     /// fn parse_integers() -> impl Parser<List<i32>> {
     ///     "-".maybe()
     ///         .and(digit.multiple())
-    ///         .to_string()
+    ///         .copy_string()
     ///         .map(|s| FromStr::from_str(&s).unwrap())
     ///         .to_list()
     ///         .multiple()
     /// }
     /// ```
-    fn to_list(self) -> ListMap<Self, E> {
+    fn to_list<L: Single<Item = T> + Concat + Clone>(self) -> ListMap<Self, L, E> {
         ListMap(self, PhantomData)
     }
 }
 
 impl<T, E, P: Parser<T, E>> ParserExt<T, E> for P {}
 
-/// Combinators on parsers that produce a [`List`](../struct.List.html)
+/// Combinators on parsers that produce a [`Concat`](../trait.Concat.html)
 ///
 /// Parsing sequences of characters or values from input is done using parsers that produce a
-/// [`List`](../struct.List.html) and the [`ListParserExt`](trait.ListParserExt.html) trait that is
-/// implemented for all such parsers.
+/// [`Concat`](../trait.Concat.html) and the [`ListParserExt`](trait.ListParserExt.html) trait that
+/// is implemented for all such parsers.
 ///
 /// The [`ListParserExt`](trait.ListParserExt.html) provides three combinators for manipulating
 /// parsers over sequences of values:
@@ -442,7 +442,7 @@ impl<T, E, P: Parser<T, E>> ParserExt<T, E> for P {}
 ///     alphabetic
 ///         .or("_")
 ///         .and(alphanumeric.or("_").multiple().maybe())
-///         .to_string()
+///         .copy_string()
 ///         .parse(source, location)
 /// }
 /// ```
@@ -457,12 +457,12 @@ impl<T, E, P: Parser<T, E>> ParserExt<T, E> for P {}
 /// [reversed](../struct.List.html#method.reverse) in order to iterate over the items in the order
 /// they were added. The `ToString` implementation for [`List<char>`](../struct.List.html) does
 /// this automatically.
-pub trait ListParserExt<T, E>: Parser<List<T>, E> + Sized {
+pub trait ListParserExt<T: Concat + Clone, E>: Parser<T, E> + Sized {
     /// Repeat a parser one or more times
     ///
     /// ```rust
     /// # use autumn::prelude::*;
-    /// fn scream_parser() -> impl Parser<List<char>> {
+    /// fn scream_parser() -> impl Parser<Span> {
     ///     "a".multiple().and("h".multiple()).and("!")
     /// }
     /// ```
@@ -474,7 +474,7 @@ pub trait ListParserExt<T, E>: Parser<List<T>, E> + Sized {
     ///
     /// ```rust
     /// # use autumn::prelude::*;
-    /// fn nondeterministic_parser() -> impl Parser<List<char>> {
+    /// fn nondeterministic_parser() -> impl Parser<Span> {
     ///     "non".maybe().and("deterministic")
     /// }
     /// ```
@@ -486,16 +486,16 @@ pub trait ListParserExt<T, E>: Parser<List<T>, E> + Sized {
     ///
     /// ```rust
     /// # use autumn::prelude::*;
-    /// fn simple_identifier() -> impl Parser<List<char>> {
+    /// fn simple_identifier() -> impl Parser<Span> {
     ///     alphabetic.and(digit)
     /// }
     /// ```
-    fn and<P: Parser<List<T>, E>>(self, other: P) -> And<Self, P, E> {
+    fn and<P: Parser<T, E>>(self, other: P) -> And<Self, P, E> {
         And(self, other, PhantomData)
     }
 }
 
-impl<T, E, P: Parser<List<T>, E>> ListParserExt<T, E> for P {}
+impl<T: Concat + Clone, E, P: Parser<T, E>> ListParserExt<T, E> for P {}
 
 /// Boxing parsers for [dynamic
 /// dispatch](https://doc.rust-lang.org/book/ch17-02-trait-objects.html#trait-objects-perform-dynamic-dispatch)
@@ -516,8 +516,9 @@ impl<T, E, P: Parser<List<T>, E>> ListParserExt<T, E> for P {}
 /// fn alphabet(source: &str, location: Span) -> ParseResult<String, &'static str> {
 ///     "abcde"
 ///         .and(digit)
+///         .copy_string()
 ///         .and_then(|text| {
-///             let text = text.to_string();
+///             let text = text;
 ///             if text.ends_with("0") {
 ///                 throw(text, "Token must not end with 0")
 ///             } else {
@@ -533,7 +534,7 @@ pub trait BoxedParserExt<'p, T, E>: Parser<T, E> + Sized + 'p {
     ///
     /// ```rust
     /// # use autumn::prelude::*;
-    /// fn parser() -> impl Parser<List<char>> {
+    /// fn parser() -> impl Parser<Span> {
     ///     "a".and("b".or("c")).boxed()
     /// }
     /// ```
@@ -545,33 +546,49 @@ pub trait BoxedParserExt<'p, T, E>: Parser<T, E> + Sized + 'p {
 impl<'p, T: 'p, E: 'p, P: Parser<T, E> + 'p> BoxedParserExt<'p, T, E> for P {}
 
 /// Combinators on parser that produce a list of characters
-pub trait TextParserExt<E>: Parser<List<char>, E> + Sized {
+pub trait TextParserExt<E>: Parser<Span, E> + Sized {
     /// Convert the list of characters into a string within a parser
     ///
     /// ```rust
     /// # use autumn::prelude::*;
     /// fn identifier() -> impl Parser<String> {
-    ///     alphabetic.and(alphanumeric.multiple().maybe()).to_string()
+    ///     alphabetic.and(alphanumeric.multiple().maybe()).copy_string()
     /// }
     /// ```
-    fn to_string(self) -> StringMap<Self, E> {
+    fn copy_string(self) -> StringMap<Self, E> {
         StringMap(self, PhantomData)
+    }
+
+    /// Only parse successfully if there is no text remaining in the input after a parse
+    ///
+    /// ```rust
+    /// # use autumn::prelude::*;
+    /// fn single_line() -> impl Parser<String> {
+    ///     any_character
+    ///         .str_condition(|s| !s.chars().any(|c| c == '\n'))
+    ///         .drop("\n")
+    ///         .copy_string()
+    ///         .end()
+    /// }
+    /// ```
+    fn str_condition<F: Fn(&str) -> bool>(self, f: F) -> StrCondition<Self, F, E> {
+        StrCondition(self, f, PhantomData)
     }
 }
 
-impl<E, P: Parser<List<char>, E>> TextParserExt<E> for P {}
+impl<E, P: Parser<Span, E>> TextParserExt<E> for P {}
 
 /// The result of the [`multiple`](trait.ListParserExt.html#method.multiple) function in the
 /// [`ListParserExt`](trait.ListParserExt.html) trait
 pub struct Multiple<P, E>(P, PhantomData<E>);
 
-impl<T, E, P: Parser<List<T>, E>> Parser<List<T>, E> for Multiple<P, E> {
-    fn parse<'s>(&self, source: &'s str, location: Span) -> ParseResult<'s, List<T>, E> {
+impl<T: Concat + Clone, E, P: Parser<T, E>> Parser<T, E> for Multiple<P, E> {
+    fn parse<'s>(&self, source: &'s str, location: Span) -> ParseResult<'s, T, E> {
         self.0
             .parse(source, location)
             .and_then(&|parsed, source, mut location| {
                 self.parse(source, location.take())
-                    .map(&|mut tail| parsed.concat(&mut tail))
+                    .map(&|tail| parsed.clone().concat(tail))
                     .or(ParseResult::success(parsed, source, location))
             })
     }
@@ -581,8 +598,8 @@ impl<T, E, P: Parser<List<T>, E>> Parser<List<T>, E> for Multiple<P, E> {
 /// [`ListParserExt`](trait.ListParserExt.html) trait
 pub struct Maybe<P, E>(P, PhantomData<E>);
 
-impl<T, E, P: Parser<List<T>, E>> Parser<List<T>, E> for Maybe<P, E> {
-    fn parse<'s>(&self, source: &'s str, location: Span) -> ParseResult<'s, List<T>, E> {
+impl<T: Concat, E, P: Parser<T, E>> Parser<T, E> for Maybe<P, E> {
+    fn parse<'s>(&self, source: &'s str, location: Span) -> ParseResult<'s, T, E> {
         self.0
             .parse(source, location.clone())
             .or(empty(source, location))
@@ -645,18 +662,19 @@ where
 /// [`ListParserExt`](trait.ListParserExt.html) trait
 pub struct And<A, B, E>(A, B, PhantomData<E>);
 
-impl<A, B, T, E> Parser<List<T>, E> for And<A, B, E>
+impl<A, B, T, E> Parser<T, E> for And<A, B, E>
 where
-    A: Parser<List<T>, E>,
-    B: Parser<List<T>, E>,
+    T: Concat + Clone,
+    A: Parser<T, E>,
+    B: Parser<T, E>,
 {
-    fn parse<'s>(&self, source: &'s str, location: Span) -> ParseResult<'s, List<T>, E> {
+    fn parse<'s>(&self, source: &'s str, location: Span) -> ParseResult<'s, T, E> {
         self.0
             .parse(source, location)
             .and_then(&|prefix, source, location| {
                 self.1
                     .parse(source, location)
-                    .map(&|suffix| prefix.clone().concat(&suffix))
+                    .map(&|suffix| prefix.clone().concat(suffix))
             })
     }
 }
@@ -821,20 +839,40 @@ impl<T, E, P: Parser<T, E>> Parser<Meta<T, Span>, E> for MetaMap<P, E> {
 
 /// The result of the [`to_list`](trait.ParserExt.html#method.to_list) function in the
 /// [`ParserExt`](trait.ParserExt.html) trait
-pub struct ListMap<P, E>(P, PhantomData<E>);
+pub struct ListMap<P, L, E>(P, PhantomData<(L, E)>);
 
-impl<T, E, P: Parser<T, E>> Parser<List<T>, E> for ListMap<P, E> {
-    fn parse<'s>(&self, source: &'s str, location: Span) -> ParseResult<'s, List<T>, E> {
-        self.0.parse(source, location).map(&List::single)
+impl<T, L: Single<Item = T>, E, P: Parser<T, E>> Parser<L, E> for ListMap<P, L, E> {
+    fn parse<'s>(&self, source: &'s str, location: Span) -> ParseResult<'s, L, E> {
+        self.0.parse(source, location).map(&L::single)
     }
 }
 
-/// The result of the [`to_string`](trait.TextParserExt.html#method.to_string) function in the
+/// The result of the [`copy_string`](trait.TextParserExt.html#method.copy_string) function in the
 /// [`TextParserExt`](trait.TextParserExt.html) trait
 pub struct StringMap<P, E>(P, PhantomData<E>);
 
-impl<E, P: Parser<List<char>, E>> Parser<String, E> for StringMap<P, E> {
+impl<E, P: Parser<Span, E>> Parser<String, E> for StringMap<P, E> {
     fn parse<'s>(&self, source: &'s str, location: Span) -> ParseResult<'s, String, E> {
-        self.0.parse(source, location).map(&|s| s.to_string())
+        self.0
+            .parse(source, location)
+            .map(&|s| s.subslice(&location, source).to_owned())
+    }
+}
+
+/// The result of the [`str_condition`](trait.TextParserExt.html#method.str_condition) function in
+/// the [`TextParserExt`](trait.TextParserExt.html) trait
+pub struct StrCondition<P, F, E>(P, F, PhantomData<E>);
+
+impl<E, P: Parser<Span, E>, F: Fn(&str) -> bool> Parser<Span, E> for StrCondition<P, F, E> {
+    fn parse<'s>(&self, source: &'s str, location: Span) -> ParseResult<'s, Span, E> {
+        self.0
+            .parse(source, location)
+            .and_then(&|parsed, remaining, remaining_location| {
+                if self.1(parsed.subslice(&location, source)) {
+                    ParseResult::success(parsed, remaining, remaining_location)
+                } else {
+                    ParseResult::none(location)
+                }
+            })
     }
 }
