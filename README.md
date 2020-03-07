@@ -34,12 +34,12 @@ underscores.
 
 ```rust
 /// Parse a single alphabetic character or underscore
-fn identifier_prefix(source: &str, location: Span) -> ParseResult<List<char>> {
+fn identifier_prefix(source: &str, location: Span) -> ParseResult<Span> {
     alphabetic.or("_").parse(source, location)
 }
 
 /// Parse a zero or more letters, digits, and underscores
-fn identifier_body(source: &str, location: Span) -> ParseResult<List<char>> {
+fn identifier_body(source: &str, location: Span) -> ParseResult<Span> {
     identifier_prefix.or(digit).multiple().maybe().parse(source, location)
 }
 
@@ -47,8 +47,7 @@ fn identifier_body(source: &str, location: Span) -> ParseResult<List<char>> {
 fn identifier(source: &str, location: Span) -> ParseResult<String> {
     identifier_prefix
         .and(identifier_body)
-        .map(|s| s.to_string())
-        .end()
+        .copy_string()
         .parse(source, location)
 }
 ```
@@ -63,16 +62,16 @@ A number of the most common combinators are shown in the example above.
    if they ar successful.
 
  * [`and`](combinators/trait.ParserExt.html#method.and) will take a parser that produces a
-   [`List`](struct.List.html) and append the result of another parser that produces the same
-   type of list.
+   [`List`](list/struct.List.html) and append the result of another parser that produces the
+   same type of list.
 
  * [`multiple`](combinators/trait.ParserExt.html#method.multiple) will take a parser that
-   produces a [`List`](struct.List.html) and attempt to apply that parser one or more times in
-   succession.
+   produces a [`List`](list/struct.List.html) and attempt to apply that parser one or more
+   times in succession.
 
  * [`maybe`](combinators/trait.ParserExt.html#method.maybe) will take a parser that produces a
-   [`List`](struct.List.html) and attempt to apply that parser zero or one times. When using
-   both [`multiple`](combinators/trait.ParserExt.html#method.multiple) and
+   [`List`](list/struct.List.html) and attempt to apply that parser zero or one times. When
+   using both [`multiple`](combinators/trait.ParserExt.html#method.multiple) and
    [`maybe`](combinators/trait.ParserExt.html#method.maybe) to achieve zero or more
    repetitions, `multiple().maybe()` must be used; `maybe().multiple()` can find an infinite
    number of ways to apply any parser on even an empty string.
@@ -86,13 +85,13 @@ A number of the most common combinators are shown in the example above.
 A few of the provided [parsers](parsers/index.html) have also been used above.
 
  * [`alphabetic`](parsers/fn.alphabetic.html) will parse a single character that is an ASCII
-   alphabetic character and produce a [`List<char>`](struct.List.html).
+   alphabetic character and produce a [`List<char>`](list/struct.List.html).
 
  * [`digit`](parsers/fn.digit.html) will parse a single character that is an ASCII digit
-   character and produce a [`List<char>`](struct.List.html).
+   character and produce a [`List<char>`](list/struct.List.html).
 
  * Any `&str` or `String` can be used to parse itself and produce a
-   [`List<char>`](struct.List.html).
+   [`List<char>`](list/struct.List.html).
 
 When invoking a parser the source must be provided as a string slice and the current position
 must be provided as a [`Span`](trait.Span.html). An intial span can be provided for the start
@@ -130,7 +129,7 @@ will produce an error associated with the alphabetic characters starting at the 
 
 ```rust
 /// Parses the first 5 letters of the alphabet in order
-fn alphabet_parse(source: &str, location: Span) -> ParseResult<List<char>, &'static str> {
+fn alphabet_parse() -> impl Parser<Span, &'static str> {
     "abcde"
         .on_none(
             alphabetic
@@ -138,7 +137,6 @@ fn alphabet_parse(source: &str, location: Span) -> ParseResult<List<char>, &'sta
                 .maybe()
                 .and_then(|text| error(text, "Not in alphabetical order"))
         )
-        .parse(source, location)
 }
 ```
 
@@ -173,7 +171,7 @@ be associated with the span of source code that was consumed to produce the erro
 
 ```rust
 /// Parses the first 5 letters of the alphabet in order
-fn alphabet_parse(source: &str, location: Span) -> ParseResult<List<char>, &'static str> {
+fn alphabet_parse() -> impl Parser<Span, &'static str> {
     "abcde"
         .on_none(
             alphabetic
@@ -182,10 +180,9 @@ fn alphabet_parse(source: &str, location: Span) -> ParseResult<List<char>, &'sta
                 .and_then(|text| throw(text, "Not in alphabetical order"))
         )
         .catch()
-        .parse(source, location)
 }
 ```
 
-Current version: 0.2.0
+Current version: 0.4.1
 
 License: ISC
