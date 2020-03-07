@@ -13,9 +13,7 @@ keywords = [
 	"descent",
 	"parser",
 	"combinator",
-	"lexer",
 	"token",
-	"lanugage"
 ]
 categories = [ "parsing" ]
 
