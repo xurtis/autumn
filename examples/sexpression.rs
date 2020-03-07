@@ -123,7 +123,7 @@ fn string(source: &str, location: Span) -> ParseResult<SExpression> {
 }
 
 fn list(source: &str, location: Span) -> ParseResult<SExpression> {
-    fn expression_list(source: &str, location: Span) -> ParseResult<Vec<Meta<SExpression, Span>>> {
+    fn expression_list(source: &str, location: Span) -> ParseResult<List<Meta<SExpression, Span>>> {
         sexpression.meta().to_list().parse(source, location)
     }
 
@@ -135,6 +135,7 @@ fn list(source: &str, location: Span) -> ParseResult<SExpression> {
                 .maybe()
                 .drop(expr_space.maybe().and(")")),
         )
+        .collect()
         .map(SExpression::List)
         .parse(source, location)
 }

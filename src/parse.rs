@@ -1,6 +1,6 @@
+use self::list::List;
 use crate::location::{new_location, Meta, Span};
-use std::collections::{BTreeSet, HashSet, LinkedList};
-use std::hash::Hash;
+use std::mem::swap;
 use std::rc::Rc;
 
 /// A parser takes an input source and produces an array of potential tagged values and an array of
@@ -48,7 +48,7 @@ impl<'s, T, E> ParseResult<'s, T, E> {
         let mut success = Vec::new();
 
         let mut results = Vec::new();
-        ::std::mem::swap(&mut self.results, &mut results);
+        swap(&mut self.results, &mut results);
 
         for result in results {
             if result.is_failure() {
@@ -489,48 +489,6 @@ pub trait Concat: Sized {
     fn concat(self, other: Self) -> Self;
 }
 
-impl<T> Concat for Vec<T> {
-    fn empty() -> Self {
-        Vec::new()
-    }
-
-    fn concat(mut self, mut other: Self) -> Self {
-        self.append(&mut other);
-        self
-    }
-}
-
-impl<T> Concat for LinkedList<T> {
-    fn empty() -> Self {
-        LinkedList::new()
-    }
-
-    fn concat(mut self, mut other: Self) -> Self {
-        self.append(&mut other);
-        self
-    }
-}
-
-impl<T: Hash + Eq> Concat for HashSet<T> {
-    fn empty() -> Self {
-        HashSet::new()
-    }
-
-    fn concat(self, other: Self) -> Self {
-        self.into_iter().chain(other.into_iter()).collect()
-    }
-}
-
-impl<T: Ord> Concat for BTreeSet<T> {
-    fn empty() -> Self {
-        BTreeSet::new()
-    }
-
-    fn concat(self, other: Self) -> Self {
-        self.into_iter().chain(other.into_iter()).collect()
-    }
-}
-
 impl Concat for Span {
     fn empty() -> Self {
         new_location()
@@ -542,52 +500,6 @@ impl Concat for Span {
 
     fn concat(self, other: Self) -> Self {
         self.join(other)
-    }
-}
-
-/// Containers that can be constructed with a single element
-pub trait Single {
-    type Item;
-
-    /// Encapsulate the single item in the container
-    fn single(item: Self::Item) -> Self;
-}
-
-impl<T> Single for Vec<T> {
-    type Item = T;
-
-    fn single(item: Self::Item) -> Self {
-        vec![item]
-    }
-}
-
-impl<T> Single for LinkedList<T> {
-    type Item = T;
-
-    fn single(item: Self::Item) -> Self {
-        let mut list = LinkedList::new();
-        list.push_back(item);
-        list
-    }
-}
-
-impl<T: Hash + Eq> Single for HashSet<T> {
-    type Item = T;
-
-    fn single(item: Self::Item) -> Self {
-        let mut set = HashSet::new();
-        set.insert(item);
-        set
-    }
-}
-
-impl<T: Ord> Single for BTreeSet<T> {
-    type Item = T;
-
-    fn single(item: Self::Item) -> Self {
-        let mut set = BTreeSet::new();
-        set.insert(item);
-        set
     }
 }
 
@@ -606,7 +518,7 @@ impl<T: Ord> Single for BTreeSet<T> {
 /// elements.
 ///
 /// ```rust
-/// # use autumn::List;
+/// # use autumn::list::List;
 /// let values = &[0, 1, 2, 3, 4, 5, 6, 7, 8];
 /// let list_a = values[1..5].iter().fold(List::single(0), |list, value| list.push(*value));
 /// let list_b = values[5..9].iter().fold(List::new(), |list, value| list.push(*value));
@@ -616,156 +528,234 @@ impl<T: Ord> Single for BTreeSet<T> {
 ///     assert_eq!(*list_value, *array_value);
 /// }
 /// ```
-#[derive(Debug)]
-pub struct List<T>(Rc<Node<T>>, usize);
+pub mod list {
+    use crate::Concat;
+    use std::mem::swap;
+    use std::rc::Rc;
 
-impl<T> List<T> {
-    /// Create a new, empty list
-    pub fn new() -> Self {
-        List(Rc::new(Node::Tail), 0)
-    }
-
-    /// Create a list with a single element
-    pub fn single(value: T) -> Self {
-        Self::new().push(value)
-    }
-
-    /// Get the number of items in the list
+    /// Persistent linked-list data structure
+    ///
+    /// This list data structure is used as it reduces the number of duplicates maintained in the
+    /// parser as it considers multiple potentially valid alternative parses.
+    ///
+    /// It is used internally to maintain the set of errors produces for a particular parse as well as
+    /// for parsers returning lists of values.
+    ///
+    /// The list is actually implemented as a first-in last-out stack structure so items in a parser
+    /// that produce a list will be the reverse of the order in which they were parsed.
+    ///
+    /// Lists are also iterators over their elements. The iterator item of the list is an `Rc` of its
+    /// elements.
     ///
     /// ```rust
-    /// # use autumn::List;
-    /// let list = List::single(1).push(2).push(3);
-    /// assert_eq!(list.length(), 3);
-    /// ```
-    pub fn length(&self) -> usize {
-        self.1
-    }
-
-    /// Push an item onto the list
-    pub fn push(&self, value: T) -> Self {
-        let List(node, length) = self;
-        let node = Node::Node(Rc::new(value), node.clone());
-        List(Rc::new(node), *length + 1)
-    }
-
-    fn push_rc(&self, value: Rc<T>) -> Self {
-        let List(node, length) = self;
-        let node = Node::Node(value, node.clone());
-        List(Rc::new(node), *length + 1)
-    }
-
-    /// Create the reversed copy of the list
+    /// # use autumn::list::List;
+    /// let values = &[0, 1, 2, 3, 4, 5, 6, 7, 8];
+    /// let list_a = values[1..5].iter().fold(List::single(0), |list, value| list.push(*value));
+    /// let list_b = values[5..9].iter().fold(List::new(), |list, value| list.push(*value));
+    /// let joined = list_a.concat(&list_b);
     ///
-    /// ```rust
-    /// # use autumn::List;
-    /// let values = &[1, 2, 3, 4, 5, 6];
-    /// let list = values.iter().fold(List::new(), |list, value| list.push(*value));
-    ///
-    /// for (list_value, array_value) in list.reverse().zip(values.iter()) {
-    ///     assert_eq!(*array_value, *list_value);
+    /// for (list_value, array_value) in joined.reverse().zip(values.iter()) {
+    ///     assert_eq!(*list_value, *array_value);
     /// }
     /// ```
-    pub fn reverse(&self) -> Self {
-        let mut reversed = List::new();
-        for node in self.clone() {
-            reversed = reversed.push_rc(node);
+    #[derive(Debug)]
+    pub struct List<T>(Rc<Node<T>>, usize);
+
+    impl<T> List<T> {
+        /// Create a new, empty list
+        pub fn new() -> Self {
+            List(Rc::new(Node::Tail), 0)
         }
-        return reversed;
-    }
 
-    /// Concatenate two lists
-    ///
-    /// ```rust
-    /// # use autumn::List;
-    /// let list = List::single(1).push(2).push(3).concat(&List::single(4).push(5).push(6));
-    /// # assert_eq!(list.length(), 6);
-    /// ```
-    pub fn concat(&self, other: &Self) -> Self {
-        let mut joined = self.clone();
-        for node in other.reverse() {
-            joined = joined.push_rc(node);
+        /// Create a list with a single element
+        pub fn single(value: T) -> Self {
+            Self::new().push(value)
         }
-        joined
-    }
-}
 
-impl<T> Clone for List<T> {
-    fn clone(&self) -> Self {
-        List(self.0.clone(), self.1)
-    }
-}
-
-impl<T> Iterator for List<T> {
-    type Item = Rc<T>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if let Some((next, tail)) = self.0.pair() {
-            *self = List(tail, self.1 - 1);
-            Some(next)
-        } else {
-            None
+        /// Get the number of items in the list
+        ///
+        /// ```rust
+        /// # use autumn::list::List;
+        /// let list = List::single(1).push(2).push(3);
+        /// assert_eq!(list.length(), 3);
+        /// ```
+        pub fn length(&self) -> usize {
+            self.1
         }
-    }
-}
 
-impl<T> ::std::iter::FromIterator<Rc<T>> for List<T> {
-    fn from_iter<I: IntoIterator<Item = Rc<T>>>(iter: I) -> Self {
-        let mut list = List::new();
-        for item in iter {
-            list = list.push_rc(item);
+        /// Push an item onto the list
+        pub fn push(&self, value: T) -> Self {
+            let List(node, length) = self;
+            let node = Node::Node(Rc::new(value), node.clone());
+            List(Rc::new(node), *length + 1)
         }
-        list
-    }
-}
 
-impl<T> ::std::iter::FromIterator<T> for List<T> {
-    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
-        let mut list = List::new();
-        for item in iter {
-            list = list.push(item);
+        fn push_rc(&self, value: Rc<T>) -> Self {
+            let List(node, length) = self;
+            let node = Node::Node(value, node.clone());
+            List(Rc::new(node), *length + 1)
         }
-        list
-    }
-}
 
-impl<T> Concat for List<T> {
-    fn empty() -> Self {
-        List::new()
-    }
+        /// Create the reversed copy of the list
+        ///
+        /// ```rust
+        /// # use autumn::list::List;
+        /// let values = &[1, 2, 3, 4, 5, 6];
+        /// let list = values.iter().fold(List::new(), |list, value| list.push(*value));
+        ///
+        /// for (list_value, array_value) in list.reverse().zip(values.iter()) {
+        ///     assert_eq!(*array_value, *list_value);
+        /// }
+        /// ```
+        pub fn reverse(&self) -> Self {
+            let mut reversed = List::new();
+            for node in self.clone() {
+                reversed = reversed.push_rc(node);
+            }
+            return reversed;
+        }
 
-    fn concat(self, other: Self) -> Self {
-        List::concat(&self, &other)
-    }
-}
+        /// Concatenate two lists
+        ///
+        /// ```rust
+        /// # use autumn::list::List;
+        /// let list = List::single(1).push(2).push(3).concat(&List::single(4).push(5).push(6));
+        /// # assert_eq!(list.length(), 6);
+        /// ```
+        pub fn concat(&self, other: &Self) -> Self {
+            let mut joined = self.clone();
+            for node in other.reverse() {
+                joined = joined.push_rc(node);
+            }
+            joined
+        }
 
-impl<T> Single for List<T> {
-    type Item = T;
+        /// Drain all of the elements from a list in reverse order
+        ///
+        /// Will produce an iterator over all of the elements in the list.
+        ///
+        /// The iterator will panic if there are multiple references to the list or elements within the
+        /// list.
+        pub fn drain(self) -> Drain<T> {
+            Drain(self.reverse())
+        }
 
-    fn single(item: Self::Item) -> Self {
-        List::single(item)
-    }
-}
-
-#[derive(Debug)]
-enum Node<T> {
-    Node(Rc<T>, Rc<Node<T>>),
-    Tail,
-}
-
-impl<T> Node<T> {
-    fn pair(&self) -> Option<(Rc<T>, Rc<Node<T>>)> {
-        match self {
-            Node::Node(value, next) => Some((value.clone(), next.clone())),
-            Node::Tail => None,
+        /// Create an iterator over references to elements of the list
+        pub fn iter(&self) -> Iter<T> {
+            Iter(&self.0)
         }
     }
-}
 
-impl<T> Clone for Node<T> {
-    fn clone(&self) -> Self {
-        match self {
-            Node::Node(value, next) => Node::Node(value.clone(), next.clone()),
-            Node::Tail => Node::Tail,
+    impl<T> Clone for List<T> {
+        fn clone(&self) -> Self {
+            List(self.0.clone(), self.1)
+        }
+    }
+
+    impl<T> Iterator for List<T> {
+        type Item = Rc<T>;
+
+        fn next(&mut self) -> Option<Self::Item> {
+            if let Some((next, tail)) = self.0.pair() {
+                let next = next.clone();
+                *self = List(tail.clone(), self.1 - 1);
+                Some(next)
+            } else {
+                None
+            }
+        }
+    }
+
+    impl<T> ::std::iter::FromIterator<Rc<T>> for List<T> {
+        fn from_iter<I: IntoIterator<Item = Rc<T>>>(iter: I) -> Self {
+            let mut list = List::new();
+            for item in iter {
+                list = list.push_rc(item);
+            }
+            list
+        }
+    }
+
+    impl<T> ::std::iter::FromIterator<T> for List<T> {
+        fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+            let mut list = List::new();
+            for item in iter {
+                list = list.push(item);
+            }
+            list
+        }
+    }
+
+    impl<T> Concat for List<T> {
+        fn empty() -> Self {
+            List::new()
+        }
+
+        fn concat(self, other: Self) -> Self {
+            List::concat(&self, &other)
+        }
+    }
+
+    /// Remove the items from a [`List`](struct.List.html) in reverse order
+    pub struct Drain<T>(List<T>);
+
+    impl<T> Iterator for Drain<T> {
+        type Item = T;
+
+        fn next(&mut self) -> Option<T> {
+            let mut list = List::new();
+            swap(&mut self.0, &mut list);
+            let List(list, size) = list;
+
+            match Rc::try_unwrap(list) {
+                Ok(Node::Node(value, next)) => {
+                    if let Ok(value) = Rc::try_unwrap(value) {
+                        self.0 = List(next, size - 1);
+                        Some(value)
+                    } else {
+                        panic!("Cannot drain list with shared elements");
+                    }
+                }
+                Ok(tail @ Node::Tail) => {
+                    self.0 = List(Rc::new(tail), 0);
+                    None
+                }
+                Err(_) => {
+                    panic!("Cannot drain list with shared elements");
+                }
+            }
+        }
+    }
+
+    /// An iterator over the items of a [`List`](struct.List.html)
+    pub struct Iter<'l, T>(&'l Node<T>);
+
+    impl<'l, T> Iterator for Iter<'l, T> {
+        type Item = &'l T;
+
+        fn next(&mut self) -> Option<&'l T> {
+            match self.0.pair() {
+                Some((value, next)) => {
+                    self.0 = next;
+                    Some(value)
+                }
+                None => None,
+            }
+        }
+    }
+
+    #[derive(Debug)]
+    enum Node<T> {
+        Node(Rc<T>, Rc<Node<T>>),
+        Tail,
+    }
+
+    impl<T> Node<T> {
+        fn pair(&self) -> Option<(&Rc<T>, &Rc<Node<T>>)> {
+            match self {
+                Node::Node(value, next) => Some((&value, next)),
+                Node::Tail => None,
+            }
         }
     }
 }

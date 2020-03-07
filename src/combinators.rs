@@ -7,16 +7,16 @@
 //! =================
 //!
 //! Parsing sequences of characters or values from input is done using parsers that produce a
-//! [`Concat`](../trait.Concat.html) and the [`ListParserExt`](trait.ListParserExt.html) trait that is
+//! [`Concat`](../trait.Concat.html) and the [`ConcatParserExt`](trait.ConcatParserExt.html) trait that is
 //! implemented for all such parsers.
 //!
-//! The [`ListParserExt`](trait.ListParserExt.html) provides three combinators for manipulating
+//! The [`ConcatParserExt`](trait.ConcatParserExt.html) provides three combinators for manipulating
 //! parsers over sequences of values:
 //!
-//!  * [`maybe`](trait.ListParserExt.html#method.maybe) repeats a parser zero or one times,
-//!  * [`multiple`](trait.ListParserExt.html#method.multiple) repeats a parser one or more times,
+//!  * [`maybe`](trait.ConcatParserExt.html#method.maybe) repeats a parser zero or one times,
+//!  * [`multiple`](trait.ConcatParserExt.html#method.multiple) repeats a parser one or more times,
 //!    and
-//!  * [`and`](trait.ListParserExt.html#method.and) uses two parsers in sequence, concatenating
+//!  * [`and`](trait.ConcatParserExt.html#method.and) uses two parsers in sequence, concatenating
 //!    their results into a single list.
 //!
 //! ```rust
@@ -36,8 +36,8 @@
 //! `multiple().maybe()` must be used; `maybe().multiple()` can find an infinite number of ways to
 //! apply any parser on even an empty string.
 //!
-//! [`and`](trait.ListParserExt.html#method.and) and
-//! [`multiple`](trait.ListParserExt.html#method.multiple) when used with parsers producing a
+//! [`and`](trait.ConcatParserExt.html#method.and) and
+//! [`multiple`](trait.ConcatParserExt.html#method.multiple) when used with parsers producing a
 //! [`Span`](../struct.Span.html) must ensure that all spans are adjacent (don't use
 //! [`drop`](trait.ParserExt.html#method.drop) or [`skip`](trait.ParserExt.html#method.skip) to
 //! join a pair of [`Span`](../struct.Span.html) results that are not continuous).
@@ -154,7 +154,7 @@
 //!         .skip(
 //!             integer
 //!                 .meta()
-//!                 .to_list::<List<_>>()
+//!                 .to_list()
 //!                 .and(
 //!                     space.maybe()
 //!                         .and(",")
@@ -217,8 +217,9 @@
 //! ```
 
 use crate::location::{Meta, Span};
-use crate::parse::{Concat, ParseResult, Parser, Single};
+use crate::parse::{list::List, Concat, ParseResult, Parser};
 use crate::parsers::empty;
+use std::iter::FromIterator;
 use std::marker::PhantomData;
 
 /// Combinators that can be used on all parsers
@@ -413,7 +414,7 @@ pub trait ParserExt<T, E>: Parser<T, E> + Sized {
     ///         .multiple()
     /// }
     /// ```
-    fn to_list<L: Single<Item = T> + Concat + Clone>(self) -> ListMap<Self, L, E> {
+    fn to_list(self) -> ListMap<Self, E> {
         ListMap(self, PhantomData)
     }
 }
@@ -423,16 +424,16 @@ impl<T, E, P: Parser<T, E>> ParserExt<T, E> for P {}
 /// Combinators on parsers that produce a [`Concat`](../trait.Concat.html)
 ///
 /// Parsing sequences of characters or values from input is done using parsers that produce a
-/// [`Concat`](../trait.Concat.html) and the [`ListParserExt`](trait.ListParserExt.html) trait that
+/// [`Concat`](../trait.Concat.html) and the [`ConcatParserExt`](trait.ConcatParserExt.html) trait that
 /// is implemented for all such parsers.
 ///
-/// The [`ListParserExt`](trait.ListParserExt.html) provides three combinators for manipulating
+/// The [`ConcatParserExt`](trait.ConcatParserExt.html) provides three combinators for manipulating
 /// parsers over sequences of values:
 ///
-///  * [`maybe`](trait.ListParserExt.html#method.maybe) repeats a parser zero or one times,
-///  * [`multiple`](trait.ListParserExt.html#method.multiple) repeats a parser one or more times,
+///  * [`maybe`](trait.ConcatParserExt.html#method.maybe) repeats a parser zero or one times,
+///  * [`multiple`](trait.ConcatParserExt.html#method.multiple) repeats a parser one or more times,
 ///    and
-///  * [`and`](trait.ListParserExt.html#method.and) uses two parsers in sequence, concatenating
+///  * [`and`](trait.ConcatParserExt.html#method.and) uses two parsers in sequence, concatenating
 ///    their results into a single list.
 ///
 /// ```rust
@@ -452,12 +453,11 @@ impl<T, E, P: Parser<T, E>> ParserExt<T, E> for P {}
 /// `multiple().maybe()` must be used; `maybe().multiple()` can find an infinite number of ways to
 /// apply any parser on even an empty string.
 ///
-/// The characters or values read from input are pushed into the [`List`](../struct.List.html) in
-/// last-in first-out (LIFO) order, so the list must be
-/// [reversed](../struct.List.html#method.reverse) in order to iterate over the items in the order
-/// they were added. The `ToString` implementation for [`List<char>`](../struct.List.html) does
-/// this automatically.
-pub trait ListParserExt<T: Concat + Clone, E>: Parser<T, E> + Sized {
+/// The characters or values read from input are pushed into the [`List`](../list/struct.List.html)
+/// in last-in first-out (LIFO) order, so the list must be
+/// [reversed](../list/struct.List.html#method.reverse) in order to iterate over the items in the
+/// order they were added.
+pub trait ConcatParserExt<T: Concat + Clone, E>: Parser<T, E> + Sized {
     /// Repeat a parser one or more times
     ///
     /// ```rust
@@ -495,7 +495,38 @@ pub trait ListParserExt<T: Concat + Clone, E>: Parser<T, E> + Sized {
     }
 }
 
-impl<T: Concat + Clone, E, P: Parser<T, E>> ListParserExt<T, E> for P {}
+impl<T: Concat + Clone, E, P: Parser<T, E>> ConcatParserExt<T, E> for P {}
+
+/// Combinators on parsers that produce a [`List`](../list/struct.List.html)
+///
+/// Sequences parsed into a [`List`](../list/struct.List.html) with only a single valid parse can
+/// be collected into any container implementing `FromIterator`.
+pub trait ListParserExt<T, E>: Parser<List<T>, E> + Sized {
+    /// Collect a unqiely parsed list into a different kind of container
+    ///
+    /// Panics
+    /// ======
+    ///
+    /// If the list, elements of the list, or a subsequence of the list has been copied or if the
+    /// list is the result of a parser with more than a single unique parse then this operation
+    /// will panic.
+    ///
+    /// ```rust
+    /// # use autumn::prelude::*;
+    /// fn token() -> impl Parser<String> {
+    ///     alphabetic.and(alphanumeric).copy_string()
+    /// }
+    ///
+    /// fn token_sequence() -> impl Parser<Vec<String>> {
+    ///     token().to_list().multiple().collect()
+    /// }
+    /// ```
+    fn collect<I: FromIterator<T>>(self) -> Collect<Self, T, I, E> {
+        Collect(self, PhantomData)
+    }
+}
+
+impl<T, E, P: Parser<List<T>, E>> ListParserExt<T, E> for P {}
 
 /// Boxing parsers for [dynamic
 /// dispatch](https://doc.rust-lang.org/book/ch17-02-trait-objects.html#trait-objects-perform-dynamic-dispatch)
@@ -578,8 +609,8 @@ pub trait TextParserExt<E>: Parser<Span, E> + Sized {
 
 impl<E, P: Parser<Span, E>> TextParserExt<E> for P {}
 
-/// The result of the [`multiple`](trait.ListParserExt.html#method.multiple) function in the
-/// [`ListParserExt`](trait.ListParserExt.html) trait
+/// The result of the [`multiple`](trait.ConcatParserExt.html#method.multiple) function in the
+/// [`ConcatParserExt`](trait.ConcatParserExt.html) trait
 pub struct Multiple<P, E>(P, PhantomData<E>);
 
 impl<T: Concat + Clone, E, P: Parser<T, E>> Parser<T, E> for Multiple<P, E> {
@@ -594,8 +625,8 @@ impl<T: Concat + Clone, E, P: Parser<T, E>> Parser<T, E> for Multiple<P, E> {
     }
 }
 
-/// The result of the [`maybe`](trait.ListParserExt.html#method.maybe) function in the
-/// [`ListParserExt`](trait.ListParserExt.html) trait
+/// The result of the [`maybe`](trait.ConcatParserExt.html#method.maybe) function in the
+/// [`ConcatParserExt`](trait.ConcatParserExt.html) trait
 pub struct Maybe<P, E>(P, PhantomData<E>);
 
 impl<T: Concat, E, P: Parser<T, E>> Parser<T, E> for Maybe<P, E> {
@@ -658,8 +689,8 @@ where
     }
 }
 
-/// The result of the [`and`](trait.ListParserExt.html#method.and) function in the
-/// [`ListParserExt`](trait.ListParserExt.html) trait
+/// The result of the [`and`](trait.ConcatParserExt.html#method.and) function in the
+/// [`ConcatParserExt`](trait.ConcatParserExt.html) trait
 pub struct And<A, B, E>(A, B, PhantomData<E>);
 
 impl<A, B, T, E> Parser<T, E> for And<A, B, E>
@@ -839,11 +870,11 @@ impl<T, E, P: Parser<T, E>> Parser<Meta<T, Span>, E> for MetaMap<P, E> {
 
 /// The result of the [`to_list`](trait.ParserExt.html#method.to_list) function in the
 /// [`ParserExt`](trait.ParserExt.html) trait
-pub struct ListMap<P, L, E>(P, PhantomData<(L, E)>);
+pub struct ListMap<P, E>(P, PhantomData<E>);
 
-impl<T, L: Single<Item = T>, E, P: Parser<T, E>> Parser<L, E> for ListMap<P, L, E> {
-    fn parse<'s>(&self, source: &'s str, location: Span) -> ParseResult<'s, L, E> {
-        self.0.parse(source, location).map(&L::single)
+impl<T, E, P: Parser<T, E>> Parser<List<T>, E> for ListMap<P, E> {
+    fn parse<'s>(&self, source: &'s str, location: Span) -> ParseResult<'s, List<T>, E> {
+        self.0.parse(source, location).map(&List::single)
     }
 }
 
@@ -874,5 +905,24 @@ impl<E, P: Parser<Span, E>, F: Fn(&str) -> bool> Parser<Span, E> for StrConditio
                     ParseResult::none(location)
                 }
             })
+    }
+}
+
+/// The result of the [`collect`](trait.ListParserExt.html#method.collect) function in the
+/// [`ListParserExt`](trait.ListParserExt.html) trait
+pub struct Collect<P, T, I, E>(P, PhantomData<(T, I, E)>);
+
+impl<T, I: FromIterator<T>, E, P: Parser<List<T>, E>> Parser<I, E> for Collect<P, T, I, E> {
+    fn parse<'s>(&self, source: &'s str, location: Span) -> ParseResult<'s, I, E> {
+        let result = self.0.parse(source, location);
+
+        if result.single_parse() || result.is_none() {
+            result.map(&|parsed| parsed.drain().collect())
+        } else {
+            panic!(
+                "Cannot collect on parse with more than one result: {}",
+                location
+            );
+        }
     }
 }

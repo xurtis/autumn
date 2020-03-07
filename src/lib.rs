@@ -71,16 +71,16 @@
 //!    if they ar successful.
 //!
 //!  * [`and`](combinators/trait.ParserExt.html#method.and) will take a parser that produces a
-//!    [`List`](struct.List.html) and append the result of another parser that produces the same
-//!    type of list.
+//!    [`List`](list/struct.List.html) and append the result of another parser that produces the
+//!    same type of list.
 //!
 //!  * [`multiple`](combinators/trait.ParserExt.html#method.multiple) will take a parser that
-//!    produces a [`List`](struct.List.html) and attempt to apply that parser one or more times in
-//!    succession.
+//!    produces a [`List`](list/struct.List.html) and attempt to apply that parser one or more
+//!    times in succession.
 //!
 //!  * [`maybe`](combinators/trait.ParserExt.html#method.maybe) will take a parser that produces a
-//!    [`List`](struct.List.html) and attempt to apply that parser zero or one times. When using
-//!    both [`multiple`](combinators/trait.ParserExt.html#method.multiple) and
+//!    [`List`](list/struct.List.html) and attempt to apply that parser zero or one times. When
+//!    using both [`multiple`](combinators/trait.ParserExt.html#method.multiple) and
 //!    [`maybe`](combinators/trait.ParserExt.html#method.maybe) to achieve zero or more
 //!    repetitions, `multiple().maybe()` must be used; `maybe().multiple()` can find an infinite
 //!    number of ways to apply any parser on even an empty string.
@@ -94,13 +94,13 @@
 //! A few of the provided [parsers](parsers/index.html) have also been used above.
 //!
 //!  * [`alphabetic`](parsers/fn.alphabetic.html) will parse a single character that is an ASCII
-//!    alphabetic character and produce a [`List<char>`](struct.List.html).
+//!    alphabetic character and produce a [`List<char>`](list/struct.List.html).
 //!
 //!  * [`digit`](parsers/fn.digit.html) will parse a single character that is an ASCII digit
-//!    character and produce a [`List<char>`](struct.List.html).
+//!    character and produce a [`List<char>`](list/struct.List.html).
 //!
 //!  * Any `&str` or `String` can be used to parse itself and produce a
-//!    [`List<char>`](struct.List.html).
+//!    [`List<char>`](list/struct.List.html).
 //!
 //! When invoking a parser the source must be provided as a string slice and the current position
 //! must be provided as a [`Span`](trait.Span.html). An intial span can be provided for the start
@@ -200,14 +200,17 @@ mod parse;
 pub mod parsers;
 
 pub use location::{new_location, path_location, Location, Meta, Span};
-pub use parse::{Concat, List, ParseResult, Parser, Single};
+pub use parse::{list, Concat, ParseResult, Parser};
 
 /// Common items from the library used when building parsers
 pub mod prelude {
-    pub use crate::combinators::{BoxedParserExt, ListParserExt, ParserExt, TextParserExt};
+    pub use crate::combinators::{
+        BoxedParserExt, ConcatParserExt, ListParserExt, ParserExt, TextParserExt,
+    };
+    pub use crate::list::List;
     pub use crate::parse;
     pub use crate::parsers::*;
-    pub use crate::{new_location, path_location, Concat, List, Meta, ParseResult, Parser, Span};
+    pub use crate::{new_location, path_location, Concat, Meta, ParseResult, Parser, Span};
 }
 
 /// Parse a source text using a given parser
@@ -258,7 +261,7 @@ mod tests {
     const VALID_SEQUENCES: &'static [&'static str] =
         &["The quick brown fox", "jumped over the lazy dog"];
 
-    fn sequence(source: &str, location: Span) -> ParseResult<List<String>> {
+    fn sequence(source: &str, location: Span) -> ParseResult<Vec<String>> {
         fn token_list(source: &str, location: Span) -> ParseResult<List<String>> {
             token.to_list().parse(source, location)
         }
@@ -267,6 +270,8 @@ mod tests {
             .and(space.skip(token_list).multiple().maybe())
             .maybe()
             .drop(space.maybe())
+            .end()
+            .collect()
             .parse(source, location)
     }
 

@@ -146,7 +146,7 @@
 //! }
 //! ```
 
-use crate::combinators::{Boxed, BoxedParserExt, ListParserExt, ParserExt, TextParserExt};
+use crate::combinators::{Boxed, BoxedParserExt, ConcatParserExt, ParserExt, TextParserExt};
 use crate::location::Span;
 use crate::{Concat, ParseResult, Parser};
 
