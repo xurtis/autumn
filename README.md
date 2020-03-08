@@ -183,6 +183,6 @@ fn alphabet_parse() -> impl Parser<Span, &'static str> {
 }
 ```
 
-Current version: 0.4.1
+Current version: 0.4.2
 
 License: ISC

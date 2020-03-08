@@ -109,17 +109,15 @@ fn float(source: &str, location: Span) -> ParseResult<SExpression> {
 }
 
 fn string(source: &str, location: Span) -> ParseResult<SExpression> {
-    "\"".skip(
-        any_character
-            .str_condition(|c| c.chars().all(|c| c != '\"'))
-            .or("\\".and("\""))
-            .multiple()
-            .maybe()
-            .drop("\""),
-    )
-    .copy_string()
-    .map(SExpression::String)
-    .parse(source, location)
+    any_character
+        .str_condition(|c| c.chars().all(|c| c != '\"'))
+        .or("\\".and("\""))
+        .multiple()
+        .maybe()
+        .surrounded_by("\"", "\"")
+        .copy_string()
+        .map(SExpression::String)
+        .parse(source, location)
 }
 
 fn list(source: &str, location: Span) -> ParseResult<SExpression> {
@@ -127,14 +125,12 @@ fn list(source: &str, location: Span) -> ParseResult<SExpression> {
         sexpression.meta().to_list().parse(source, location)
     }
 
-    "(".and(expr_space.maybe())
-        .skip(
-            expression_list
-                .and(expr_space.skip(expression_list).multiple().maybe())
-                .drop(expr_space.maybe())
-                .maybe()
-                .drop(expr_space.maybe().and(")")),
-        )
+    expression_list
+        .and(expr_space.skip(expression_list).multiple().maybe())
+        .drop(expr_space.maybe())
+        .maybe()
+        .maybe_space_around()
+        .surrounded_by("(", ")")
         .collect()
         .map(SExpression::List)
         .parse(source, location)

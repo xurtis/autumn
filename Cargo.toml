@@ -1,6 +1,6 @@
 [package]
 name = "autumn"
-version = "0.4.1"
+version = "0.4.2"
 authors = ["Curtis Millar <curtis@curtism.me>"]
 edition = "2018"
 readme = "README.md"

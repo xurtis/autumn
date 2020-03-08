@@ -286,6 +286,15 @@ where
     function
 }
 
+/// Takes a reference to a parser and produces a complete parser
+///
+/// This is the most simple mechanism to use a reference to a parser as a parser. We can't
+/// implement parsers directly without conflicting with the implementation of parsers on
+/// implementors of the Fn trait.
+pub fn ref_parser<'p, T: 'p, E: 'p, P: Parser<T, E>>(parser: &'p P) -> impl Parser<T, E> + 'p {
+    closure(move |source, location| parser.parse(source, location))
+}
+
 /// Parsers a single character from the input as an element of a
 /// [`Span`](../struct.Span.html)
 ///

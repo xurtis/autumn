@@ -138,9 +138,8 @@ fn rem(source: &str, location: Span) -> ParseResult<i32, EvalError> {
 }
 
 fn paren(source: &str, location: Span) -> ParseResult<i32, EvalError> {
-    "(".and(space.maybe())
-        .and_then(|_| add)
-        .drop(space.maybe().and(")"))
+    add.maybe_space_around()
+        .surrounded_by("(", ")")
         .or(literal)
         .on_none(
             any_character
@@ -162,5 +161,5 @@ fn literal(source: &str, location: Span) -> ParseResult<i32, EvalError> {
 }
 
 fn operator(token: &'static str) -> impl Parser<Span, EvalError> {
-    space.maybe().and(token).and(space.maybe())
+    token.maybe_space_around()
 }

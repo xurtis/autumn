@@ -148,33 +148,12 @@
 //! }
 //!
 //! /// Parse a list of integers and get the source location of each integer
-//! fn integer_list(source: &str, location: Span) -> ParseResult<List<Meta<String, Span>>> {
-//!     "["
-//!         .and(space.maybe())
-//!         .skip(
-//!             integer
-//!                 .meta()
-//!                 .to_list()
-//!                 .and(
-//!                     space.maybe()
-//!                         .and(",")
-//!                         .and(space.maybe())
-//!                         .skip(integer.meta().to_list())
-//!                         .multiple()
-//!                         .maybe()
-//!                 )
-//!                 .maybe()
-//!                 .drop(",".and(space.maybe()).maybe())
-//!         )
-//!         .drop("]")
-//!         .map(|integers| {
-//!             integers
-//!                 // LIFO -> FIFO
-//!                 .reverse()
-//!                 // Rc<Meta<String, Span>> -> Meta<String, Span>
-//!                 .map(|s| s.as_ref().clone())
-//!                 .collect()
-//!         })
+//! fn integer_list(source: &str, location: Span) -> ParseResult<Vec<Meta<String, Span>>> {
+//!     integer
+//!         .meta()
+//!         .delimited_by(",".maybe_space_after(), ..)
+//!         .surrounded_by("[".maybe_space_after(), "]")
+//!         .collect()
 //!         .parse(source, location)
 //! }
 //! # assert!(parse(integer_list, "[]").is_success());
@@ -218,9 +197,10 @@
 
 use crate::location::{Meta, Span};
 use crate::parse::{list::List, Concat, ParseResult, Parser};
-use crate::parsers::empty;
+use crate::parsers::{empty, space};
 use std::iter::FromIterator;
 use std::marker::PhantomData;
+use std::ops::{Bound, RangeBounds};
 
 /// Combinators that can be used on all parsers
 pub trait ParserExt<T, E>: Parser<T, E> + Sized {
@@ -332,6 +312,18 @@ pub trait ParserExt<T, E>: Parser<T, E> + Sized {
         Drop(self, other, PhantomData)
     }
 
+    /// Apply an additional parser and discard any result
+    ///
+    /// ```rust
+    /// # use autumn::prelude::*;
+    /// fn drop_trailing_whitespace() -> impl Parser<String> {
+    ///     "hello".maybe_drop(space).copy_string()
+    /// }
+    /// ```
+    fn maybe_drop<V, P: Parser<V, E>>(self, other: P) -> MaybeDrop<Self, P, V, E> {
+        MaybeDrop(self, other, PhantomData)
+    }
+
     /// Apply an additional parser and take its output instead
     ///
     /// ```rust
@@ -417,6 +409,205 @@ pub trait ParserExt<T, E>: Parser<T, E> + Sized {
     fn to_list(self) -> ListMap<Self, E> {
         ListMap(self, PhantomData)
     }
+
+    /// Repeat the parser a given number of times with the provided delimeter with an optional
+    /// trailing delimeter
+    ///
+    /// ```rust
+    /// # use autumn::prelude::*;
+    /// use std::str::FromStr;
+    /// fn integer() -> impl Parser<i32> {
+    ///     "-".maybe()
+    ///         .and(digit.multiple())
+    ///         .copy_string()
+    ///         .map(|s| FromStr::from_str(&s).unwrap())
+    /// }
+    ///
+    /// fn integer_list() -> impl Parser<List<i32>> {
+    ///     integer()
+    ///         .maybe_space_after()
+    ///         .delimited_by(",".maybe_space_after(), ..)
+    ///         .surrounded_by("[".maybe_space_after(), "]")
+    /// }
+    /// # assert!(parse(integer_list(), "[1,2,3,4]").single_parse());
+    /// # assert!(parse(integer_list(), "[ 1 , 2 , 3 , 4]").single_parse());
+    /// # assert!(parse(integer_list(), "[1,2,3,4,]").single_parse());
+    /// # assert!(parse(integer_list(), "[ 1 , 2 , 3 , 4 , ]").single_parse());
+    /// ```
+    fn delimited_by<D, P: Parser<D, E>, R: RangeBounds<usize>>(
+        self,
+        delimiter: P,
+        repetitions: R,
+    ) -> DelimitedBy<Self, P, D, R, E> {
+        DelimitedBy(self, delimiter, repetitions, PhantomData)
+    }
+
+    /// Repeat the parser a given number of times with the provided delimeter
+    ///
+    /// ```rust
+    /// # use autumn::prelude::*;
+    /// use std::str::FromStr;
+    /// fn integer() -> impl Parser<i32> {
+    ///     "-".maybe()
+    ///         .and(digit.multiple())
+    ///         .copy_string()
+    ///         .map(|s| FromStr::from_str(&s).unwrap())
+    /// }
+    ///
+    /// fn integer_list() -> impl Parser<List<i32>> {
+    ///     integer()
+    ///         .maybe_space_after()
+    ///         .strictly_delimited_by(",".maybe_space_after(), ..)
+    ///         .surrounded_by("[".maybe_space_after(), "]")
+    /// }
+    /// # assert!(parse(integer_list(), "[1,2,3,4]").single_parse());
+    /// # assert!(parse(integer_list(), "[ 1 , 2 , 3 , 4]").single_parse());
+    /// # assert!(parse(integer_list(), "[1,2,3,4,]").is_none());
+    /// ```
+    fn strictly_delimited_by<D, P: Parser<D, E>, R: RangeBounds<usize>>(
+        self,
+        delimiter: P,
+        repetitions: R,
+    ) -> StrictlyDelimitedBy<Self, P, D, R, E> {
+        StrictlyDelimitedBy(self, delimiter, repetitions, PhantomData)
+    }
+
+    /// Enclose the parser in the given open and close delimeters
+    ///
+    /// ```rust
+    /// # use autumn::prelude::*;
+    /// use std::str::FromStr;
+    /// fn integer() -> impl Parser<i32> {
+    ///     "-".maybe()
+    ///         .and(digit.multiple())
+    ///         .copy_string()
+    ///         .map(|s| FromStr::from_str(&s).unwrap())
+    /// }
+    ///
+    /// fn integer_list() -> impl Parser<List<i32>> {
+    ///     integer()
+    ///         .maybe_space_after()
+    ///         .strictly_delimited_by(",".maybe_space_after(), ..)
+    ///         .surrounded_by("[".maybe_space_after(), "]")
+    /// }
+    /// # assert!(parse(integer_list(), "[1,2,3,4]").single_parse());
+    /// # assert!(parse(integer_list(), "[ 1 , 2 , 3 , 4]").single_parse());
+    /// # assert!(parse(integer_list(), "[1,2,3,4,]").is_none());
+    /// ```
+    fn surrounded_by<O: Clone, C: Clone, OP: Parser<O, E>, CP: Parser<C, E>>(
+        self,
+        open: OP,
+        close: CP,
+    ) -> SurroundedBy<Self, OP, CP, O, C, E> {
+        SurroundedBy(self, open, close, PhantomData)
+    }
+
+    /// Parse two parsers and collect them in a tuple
+    ///
+    /// ```rust
+    /// # use autumn::prelude::*;
+    /// use std::collections::HashSet;
+    /// fn operator<O: Clone, A: Clone, B: Clone>(
+    ///     operator: impl Parser<O>,
+    ///     left: impl Parser<A>,
+    ///     right: impl Parser<B>,
+    /// ) -> impl Parser<(A, B)> {
+    ///     left.drop(operator.maybe_space_around()).pair(right)
+    /// }
+    /// ```
+    fn pair<B, P: Parser<B, E>>(self, other: P) -> Pair<Self, P, E> {
+        Pair(self, other, PhantomData)
+    }
+
+    /// Ignore the space that always appears after the parser
+    ///
+    /// ```rust
+    /// # use autumn::prelude::*;
+    /// use std::collections::HashSet;
+    /// fn item() -> impl Parser<String> {
+    ///     alphanumeric.multiple().copy_string()
+    /// }
+    ///
+    /// fn set_decl() -> impl Parser<HashSet<String>> {
+    ///     item()
+    ///         .delimited_by(space, ..)
+    ///         .surrounded_by(
+    ///             "set".space_after().drop("{".maybe_space_after()),
+    ///             "}"
+    ///         )
+    ///         .collect()
+    /// }
+    /// # assert!(parse(set_decl(), "set{}").is_none());
+    /// # assert!(parse(set_decl(), "set {}").single_parse());
+    /// # assert!(parse(set_decl(), "set { }").single_parse());
+    /// # assert!(parse(set_decl(), "set {one two three}").single_parse());
+    /// # assert!(parse(set_decl(), "set { one two three }").single_parse());
+    /// ```
+    fn space_after(self) -> SpaceAfter<Self, E> {
+        SpaceAfter(self, PhantomData)
+    }
+
+    /// Ignore the space that might appear after the parser
+    ///
+    /// ```rust
+    /// # use autumn::prelude::*;
+    /// use std::collections::HashSet;
+    /// fn item() -> impl Parser<String> {
+    ///     alphanumeric.multiple().copy_string()
+    /// }
+    ///
+    /// fn set_decl() -> impl Parser<HashSet<String>> {
+    ///     item()
+    ///         .delimited_by(space, ..)
+    ///         .surrounded_by(
+    ///             "set".maybe_space_after().drop("{".maybe_space_after()),
+    ///             "}"
+    ///         )
+    ///         .collect()
+    /// }
+    /// # assert!(parse(set_decl(), "set{}").single_parse());
+    /// # assert!(parse(set_decl(), "set { }").single_parse());
+    /// # assert!(parse(set_decl(), "set {one two three}").single_parse());
+    /// # assert!(parse(set_decl(), "set { one two three }").single_parse());
+    fn maybe_space_after(self) -> MaybeSpaceAfter<Self, E> {
+        MaybeSpaceAfter(self, PhantomData)
+    }
+
+    /// Ignore the space that always appears before the parser
+    fn space_before(self) -> SpaceBefore<Self, E> {
+        SpaceBefore(self, PhantomData)
+    }
+
+    /// Ignore the space that might appear before the parser
+    fn maybe_space_before(self) -> MaybeSpaceBefore<Self, E> {
+        MaybeSpaceBefore(self, PhantomData)
+    }
+
+    /// Ignore the space that always appears before and after the parser
+    fn space_around(self) -> SpaceAround<Self, E> {
+        SpaceAround(self, PhantomData)
+    }
+
+    /// Ignore the space that might appear before or after the parser
+    ///
+    /// ```rust
+    /// # use autumn::prelude::*;
+    /// use std::collections::HashSet;
+    /// fn operator<O: Clone, A: Clone, B: Clone>(
+    ///     left: impl Parser<A>,
+    ///     operator: impl Parser<O>,
+    ///     right: impl Parser<B>,
+    /// ) -> impl Parser<(A, B)> {
+    ///     left.drop(operator.maybe_space_around()).pair(right)
+    /// }
+    /// # assert!(parse(operator("left", "+", "right"), "left+right").single_parse());
+    /// # assert!(parse(operator("left", "+", "right"), "left +right").single_parse());
+    /// # assert!(parse(operator("left", "+", "right"), "left+ right").single_parse());
+    /// # assert!(parse(operator("left", "+", "right"), "left + right").single_parse());
+    /// ```
+    fn maybe_space_around(self) -> MaybeSpaceAround<Self, E> {
+        MaybeSpaceAround(self, PhantomData)
+    }
 }
 
 impl<T, E, P: Parser<T, E>> ParserExt<T, E> for P {}
@@ -492,6 +683,22 @@ pub trait ConcatParserExt<T: Concat + Clone, E>: Parser<T, E> + Sized {
     /// ```
     fn and<P: Parser<T, E>>(self, other: P) -> And<Self, P, E> {
         And(self, other, PhantomData)
+    }
+
+    /// Repeat a parser for a specified number of times
+    ///
+    /// ```rust
+    /// # use autumn::prelude::*;
+    /// fn scream_parser() -> impl Parser<Span> {
+    ///     "a".multiple().and("h".repeated(1..3)).and("!")
+    /// }
+    /// # assert!(parse(scream_parser(), "a!").is_none());
+    /// # assert!(parse(scream_parser(), "ah!").single_parse());
+    /// # assert!(parse(scream_parser(), "ahh!").single_parse());
+    /// # assert!(parse(scream_parser(), "ahhh!").is_none());
+    /// ```
+    fn repeated<R: RangeBounds<usize> + Clone>(self, repetitions: R) -> Repeat<Self, R, E> {
+        Repeat(self, repetitions, PhantomData)
     }
 }
 
@@ -572,6 +779,18 @@ pub trait BoxedParserExt<'p, T, E>: Parser<T, E> + Sized + 'p {
     fn boxed(self) -> Boxed<dyn Parser<T, E> + 'p> {
         Boxed::new(self)
     }
+
+    /// Convert a parser into a dynamically dispatched parser
+    ///
+    /// ```rust
+    /// # use autumn::prelude::*;
+    /// fn parser() -> impl Parser<Span> {
+    ///     "a".and("b".or("c")).boxed()
+    /// }
+    /// ```
+    fn ref_parser(&'p self) -> Referenced<'p, Self, E> {
+        Referenced(self, PhantomData)
+    }
 }
 
 impl<'p, T: 'p, E: 'p, P: Parser<T, E> + 'p> BoxedParserExt<'p, T, E> for P {}
@@ -621,6 +840,52 @@ impl<T: Concat + Clone, E, P: Parser<T, E>> Parser<T, E> for Multiple<P, E> {
                 self.parse(source, location.take())
                     .map(&|tail| parsed.clone().concat(tail))
                     .or(ParseResult::success(parsed, source, location))
+            })
+    }
+}
+
+/// The result of the [`repeated`](trait.ConcatParserExt.html#method.repeated) function in the
+/// [`ConcatParserExt`](trait.ConcatParserExt.html) trait
+pub struct Repeat<P, R, E>(P, R, PhantomData<E>);
+
+#[derive(Clone)]
+struct Counter<P>(P, usize);
+
+impl<P: Concat> Concat for Counter<P> {
+    fn empty() -> Self {
+        Counter(P::empty(), 0)
+    }
+
+    fn concat(self, other: Self) -> Self {
+        Counter(self.0.concat(other.0), self.1 + other.1)
+    }
+}
+
+impl<T: Concat + Clone, E, R: RangeBounds<usize>, P: Parser<T, E>> Parser<T, E>
+    for Repeat<P, R, E>
+{
+    fn parse<'s>(&self, source: &'s str, location: Span) -> ParseResult<'s, T, E> {
+        self.0
+            .ref_parser()
+            .map(|parsed| Counter(parsed, 1))
+            .multiple()
+            .maybe()
+            .parse(source, location)
+            .and_then(&|Counter(parsed, length), source, location| {
+                let long_enough = match self.1.start_bound() {
+                    // Not enough for the minimum length
+                    Bound::Included(minimum) if length < *minimum => ParseResult::none(location),
+                    Bound::Excluded(minimum) if length <= *minimum => ParseResult::none(location),
+                    // No minimum bound
+                    _ => ParseResult::success(parsed.clone(), source, location),
+                };
+                match self.1.end_bound() {
+                    // Too many elements
+                    Bound::Included(maximum) if length > *maximum => ParseResult::none(location),
+                    Bound::Excluded(maximum) if length >= *maximum => ParseResult::none(location),
+                    // Could take more elements
+                    _ => long_enough,
+                }
             })
     }
 }
@@ -797,6 +1062,27 @@ where
     }
 }
 
+/// The result of the [`maybe_drop`](trait.ParserExt.html#method.maybe_drop) function in the
+/// [`ParserExt`](trait.ParserExt.html) trait
+pub struct MaybeDrop<A, B, V, E>(A, B, PhantomData<(V, E)>);
+
+impl<A, B, T: Clone, V, E> Parser<T, E> for MaybeDrop<A, B, V, E>
+where
+    A: Parser<T, E>,
+    B: Parser<V, E>,
+{
+    fn parse<'s>(&self, source: &'s str, location: Span) -> ParseResult<'s, T, E> {
+        self.0
+            .parse(source, location)
+            .and_then(&|keep, source, location| {
+                self.1
+                    .parse(source, location)
+                    .map(&|_| keep.clone())
+                    .or(ParseResult::success(keep, source, location))
+            })
+    }
+}
+
 /// The result of the [`skip`](trait.ParserExt.html#method.skip) function in the
 /// [`ParserExt`](trait.ParserExt.html) trait
 pub struct Skip<P, Q, T, E>(P, Q, PhantomData<(T, E)>);
@@ -825,6 +1111,16 @@ impl<'p, T, E> Boxed<dyn Parser<T, E> + 'p> {
 }
 
 impl<'p, T, E> Parser<T, E> for Boxed<dyn Parser<T, E> + 'p> {
+    fn parse<'s>(&self, source: &'s str, location: Span) -> ParseResult<'s, T, E> {
+        self.0.parse(source, location)
+    }
+}
+
+/// The result of the [`ref_parser`](trait.BoxedParserExt.html#method.ref_parser) function in the
+/// [`BoxedParserExt`](trait.BoxedParserExt.html) trait
+pub struct Referenced<'p, P, E>(&'p P, PhantomData<E>);
+
+impl<'p, T, E, P: Parser<T, E>> Parser<T, E> for Referenced<'p, P, E> {
     fn parse<'s>(&self, source: &'s str, location: Span) -> ParseResult<'s, T, E> {
         self.0.parse(source, location)
     }
@@ -878,6 +1174,113 @@ impl<T, E, P: Parser<T, E>> Parser<List<T>, E> for ListMap<P, E> {
     }
 }
 
+/// The result of the [`delimited_by`](trait.ParserExt.html#method.delimited_by) function in the
+/// [`ParserExt`](trait.ParserExt.html) trait
+pub struct DelimitedBy<P, S, D, R, E>(P, S, R, PhantomData<(D, E)>);
+
+impl<T, D, E, R, P, S> Parser<List<T>, E> for DelimitedBy<P, S, D, R, E>
+where
+    T: Clone,
+    R: RangeBounds<usize> + Clone,
+    P: Parser<T, E>,
+    S: Parser<D, E>,
+{
+    fn parse<'s>(&self, source: &'s str, location: Span) -> ParseResult<'s, List<T>, E> {
+        self.0
+            .ref_parser()
+            .drop(self.1.ref_parser())
+            .to_list()
+            .multiple()
+            .maybe()
+            .and(
+                self.0
+                    .ref_parser()
+                    .to_list()
+                    .maybe_drop(self.1.ref_parser()),
+            )
+            .maybe()
+            .parse(source, location)
+            .and_then(&|parsed, source, location| {
+                let length = parsed.length();
+                let long_enough = match self.2.start_bound() {
+                    // Not enough for the minimum length
+                    Bound::Included(minimum) if length < *minimum => ParseResult::none(location),
+                    Bound::Excluded(minimum) if length <= *minimum => ParseResult::none(location),
+                    // No minimum bound
+                    _ => ParseResult::success(parsed.clone(), source, location),
+                };
+                match self.2.end_bound() {
+                    // Too many elements
+                    Bound::Included(maximum) if length > *maximum => ParseResult::none(location),
+                    Bound::Excluded(maximum) if length >= *maximum => ParseResult::none(location),
+                    // Could take more elements
+                    _ => long_enough,
+                }
+            })
+    }
+}
+
+/// The result of the [`strictly_delimited_by`](trait.ParserExt.html#method.strictly_delimited_by)
+/// function in the [`ParserExt`](trait.ParserExt.html) trait
+pub struct StrictlyDelimitedBy<P, S, D, R, E>(P, S, R, PhantomData<(D, E)>);
+
+impl<T, D, E, R, P, S> Parser<List<T>, E> for StrictlyDelimitedBy<P, S, D, R, E>
+where
+    T: Clone,
+    R: RangeBounds<usize> + Clone,
+    P: Parser<T, E>,
+    S: Parser<D, E>,
+{
+    fn parse<'s>(&self, source: &'s str, location: Span) -> ParseResult<'s, List<T>, E> {
+        self.0
+            .ref_parser()
+            .drop(self.1.ref_parser())
+            .to_list()
+            .multiple()
+            .maybe()
+            .and(self.0.ref_parser().to_list())
+            .maybe()
+            .parse(source, location)
+            .and_then(&|parsed, source, location| {
+                let length = parsed.length();
+                let long_enough = match self.2.start_bound() {
+                    // Not enough for the minimum length
+                    Bound::Included(minimum) if length < *minimum => ParseResult::none(location),
+                    Bound::Excluded(minimum) if length <= *minimum => ParseResult::none(location),
+                    // No minimum bound
+                    _ => ParseResult::success(parsed.clone(), source, location),
+                };
+                match self.2.end_bound() {
+                    // Too many elements
+                    Bound::Included(maximum) if length > *maximum => ParseResult::none(location),
+                    Bound::Excluded(maximum) if length >= *maximum => ParseResult::none(location),
+                    // Could take more elements
+                    _ => long_enough,
+                }
+            })
+    }
+}
+
+/// The result of the [`surrounded_by`](trait.ParserExt.html#method.surrounded_by)
+/// function in the [`ParserExt`](trait.ParserExt.html) trait
+pub struct SurroundedBy<P, OP, CP, O, C, E>(P, OP, CP, PhantomData<(O, C, E)>);
+
+impl<T, O, C, P, OP, CP, E> Parser<T, E> for SurroundedBy<P, OP, CP, O, C, E>
+where
+    T: Clone,
+    P: Parser<T, E>,
+    OP: Parser<C, E>,
+    CP: Parser<C, E>,
+{
+    fn parse<'s>(&self, source: &'s str, location: Span) -> ParseResult<'s, T, E> {
+        self.1
+            .ref_parser()
+            .skip(self.0.ref_parser())
+            .drop(self.2.ref_parser())
+            .parse(source, location)
+    }
+}
+
 /// The result of the [`copy_string`](trait.TextParserExt.html#method.copy_string) function in the
 /// [`TextParserExt`](trait.TextParserExt.html) trait
 pub struct StringMap<P, E>(P, PhantomData<E>);
@@ -924,5 +1327,97 @@ impl<T, I: FromIterator<T>, E, P: Parser<List<T>, E>> Parser<I, E> for Collect<P
                 location
             );
         }
+    }
+}
+
+/// The result of the [`pair`](trait.ParserExt.html#method.pair) function in the
+/// [`ParserExt`](trait.ParserExt.html) trait
+pub struct Pair<A, B, E>(A, B, PhantomData<E>);
+
+impl<A, B, PA, PB, E> Parser<(A, B), E> for Pair<PA, PB, E>
+where
+    A: Clone,
+    PA: Parser<A, E>,
+    PB: Parser<B, E>,
+{
+    fn parse<'s>(&self, source: &'s str, location: Span) -> ParseResult<'s, (A, B), E> {
+        self.0
+            .ref_parser()
+            .and_then(move |left| self.1.ref_parser().map(move |right| (left.clone(), right)))
+            .parse(source, location)
+    }
+}
+
+/// The result of the [`space_after`](trait.ParserExt.html#method.space_after) function in the
+/// [`ParserExt`](trait.ParserExt.html) trait
+pub struct SpaceAfter<P, E>(P, PhantomData<E>);
+
+impl<T: Clone, E, P: Parser<T, E>> Parser<T, E> for SpaceAfter<P, E> {
+    fn parse<'s>(&self, source: &'s str, location: Span) -> ParseResult<'s, T, E> {
+        self.0.ref_parser().drop(space).parse(source, location)
+    }
+}
+
+/// The result of the [`maybe_space_after`](trait.ParserExt.html#method.maybe_space_after) function
+/// in the [`ParserExt`](trait.ParserExt.html) trait
+pub struct MaybeSpaceAfter<P, E>(P, PhantomData<E>);
+
+impl<T: Clone, E, P: Parser<T, E>> Parser<T, E> for MaybeSpaceAfter<P, E> {
+    fn parse<'s>(&self, source: &'s str, location: Span) -> ParseResult<'s, T, E> {
+        self.0
+            .ref_parser()
+            .drop(space.maybe())
+            .parse(source, location)
+    }
+}
+
+/// The result of the [`space_before`](trait.ParserExt.html#method.space_before) function in the
+/// [`ParserExt`](trait.ParserExt.html) trait
+pub struct SpaceBefore<P, E>(P, PhantomData<E>);
+
+impl<T, E, P: Parser<T, E>> Parser<T, E> for SpaceBefore<P, E> {
+    fn parse<'s>(&self, source: &'s str, location: Span) -> ParseResult<'s, T, E> {
+        space.skip(self.0.ref_parser()).parse(source, location)
+    }
+}
+
+/// The result of the [`maybe_space_before`](trait.ParserExt.html#method.maybe_space_before)
+/// function in the [`ParserExt`](trait.ParserExt.html) trait
+pub struct MaybeSpaceBefore<P, E>(P, PhantomData<E>);
+
+impl<T: Clone, E, P: Parser<T, E>> Parser<T, E> for MaybeSpaceBefore<P, E> {
+    fn parse<'s>(&self, source: &'s str, location: Span) -> ParseResult<'s, T, E> {
+        space
+            .maybe()
+            .skip(self.0.ref_parser())
+            .parse(source, location)
+    }
+}
+
+/// The result of the [`space_around`](trait.ParserExt.html#method.space_around) function in the
+/// [`ParserExt`](trait.ParserExt.html) trait
+pub struct SpaceAround<P, E>(P, PhantomData<E>);
+
+impl<T: Clone, E, P: Parser<T, E>> Parser<T, E> for SpaceAround<P, E> {
+    fn parse<'s>(&self, source: &'s str, location: Span) -> ParseResult<'s, T, E> {
+        self.0
+            .ref_parser()
+            .space_before()
+            .space_after()
+            .parse(source, location)
+    }
+}
+
+/// The result of the [`maybe_space_around`](trait.ParserExt.html#method.maybe_space_around)
+/// function in the [`ParserExt`](trait.ParserExt.html) trait
+pub struct MaybeSpaceAround<P, E>(P, PhantomData<E>);
+
+impl<T: Clone, E, P: Parser<T, E>> Parser<T, E> for MaybeSpaceAround<P, E> {
+    fn parse<'s>(&self, source: &'s str, location: Span) -> ParseResult<'s, T, E> {
+        self.0
+            .ref_parser()
+            .maybe_space_before()
+            .maybe_space_after()
+            .parse(source, location)
     }
 }
