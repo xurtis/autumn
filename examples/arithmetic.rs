@@ -76,36 +76,24 @@ fn expression(source: &str, location: Span) -> ParseResult<i32, EvalError> {
 }
 
 fn add(source: &str, location: Span) -> ParseResult<i32, EvalError> {
-    sub.and_then(|left| {
-        operator("+")
-            .skip(add.map(move |right| left + right))
-            .or(value(left))
-    })
-    .parse(source, location)
+    sub.fold(|left| operator("+").skip(sub.map(move |right| left + right)))
+        .parse(source, location)
 }
 
 fn sub(source: &str, location: Span) -> ParseResult<i32, EvalError> {
-    mul.and_then(|left| {
-        operator("-")
-            .skip(sub.map(move |right| left - right))
-            .or(value(left))
-    })
-    .parse(source, location)
+    mul.fold(|left| operator("-").skip(mul.map(move |right| left - right)))
+        .parse(source, location)
 }
 
 fn mul(source: &str, location: Span) -> ParseResult<i32, EvalError> {
-    div.and_then(|left| {
-        operator("*")
-            .skip(mul.map(move |right| left * right))
-            .or(value(left))
-    })
-    .parse(source, location)
+    div.fold(|left| operator("*").skip(div.map(move |right| left * right)))
+        .parse(source, location)
 }
 
 fn div(source: &str, location: Span) -> ParseResult<i32, EvalError> {
-    rem.and_then(&|left| {
+    rem.fold(|left| {
         operator("/")
-            .skip(div.map(move |right| (left, right)))
+            .skip(rem.map(move |right| (left, right)))
             .and_then(&|(left, right)| {
                 if right != 0 {
                     value(left / right)
@@ -113,7 +101,6 @@ fn div(source: &str, location: Span) -> ParseResult<i32, EvalError> {
                     throw(1, DivisionByZero(left, right))
                 }
             })
-            .or(value(left))
     })
     .catch()
     .parse(source, location)
@@ -121,9 +108,9 @@ fn div(source: &str, location: Span) -> ParseResult<i32, EvalError> {
 
 fn rem(source: &str, location: Span) -> ParseResult<i32, EvalError> {
     paren
-        .and_then(&|left| {
+        .fold(|left| {
             operator("%")
-                .skip(rem.map(move |right| (left, right)))
+                .skip(paren.map(move |right| (left, right)))
                 .and_then(&|(left, right)| {
                     if right != 0 {
                         value(left % right)
@@ -131,7 +118,6 @@ fn rem(source: &str, location: Span) -> ParseResult<i32, EvalError> {
                         throw(1, ModuloZero(left, right))
                     }
                 })
-                .or(value(left))
         })
         .catch()
         .parse(source, location)

@@ -197,7 +197,7 @@
 
 use crate::location::{Meta, Span};
 use crate::parse::{list::List, Concat, ParseResult, Parser};
-use crate::parsers::{empty, space};
+use crate::parsers::{empty, space, value};
 use std::iter::FromIterator;
 use std::marker::PhantomData;
 use std::ops::{Bound, RangeBounds};
@@ -267,6 +267,37 @@ pub trait ParserExt<T, E>: Parser<T, E> + Sized {
     /// ```
     fn and_then<V, Q: Parser<V, E>, F: Fn(T) -> Q>(self, map: F) -> AndThen<Self, F, T, E> {
         AndThen(self, map, PhantomData)
+    }
+
+    /// Repeatedly apply a parser using it to extend the previous results of the parse
+    ///
+    /// This allows for a form of 'left recursion' where a parser rule includes itself as its first
+    /// parser.
+    ///
+    /// ```rust
+    /// # use autumn::prelude::*;
+    /// fn identifier() -> impl Parser<String> {
+    ///     alphabetic.and(alphanumeric.repeated(..)).copy_string()
+    /// }
+    ///
+    /// fn concat() -> impl Parser<String> {
+    ///     identifier()
+    ///         .fold(|left| {
+    ///             "##".maybe_space_around()
+    ///                 .skip(identifier())
+    ///                 .map(move |right| {
+    ///                     let mut left = left.clone();
+    ///                     left.push_str(&right);
+    ///                     left
+    ///                 })
+    ///         })
+    /// }
+    /// # assert!(parse(concat(), "left").single_parse());
+    /// # assert!(parse(concat(), "left ## right").single_parse());
+    /// # assert!(parse(concat(), "left ## middle ## right").single_parse());
+    /// ```
+    fn fold<P: Parser<T, E>, F: Fn(T) -> P>(self, fold: F) -> Fold<Self, F, E> {
+        Fold(self, fold, PhantomData)
     }
 
     /// Apply an alternative parser if the preceding parser produces errors or no successful parses
@@ -1007,6 +1038,29 @@ where
         self.0
             .parse(source, location)
             .and_then(&|value, source, location| (self.1)(value).parse(source, location))
+    }
+}
+
+/// The result of the [`repeat`](trait.ParserExt.html#method.repeat) function in the
+/// [`ParserExt`](trait.ParserExt.html) trait
+pub struct Fold<P, F, E>(P, F, PhantomData<E>);
+
+impl<P, F, T, E, Q> Parser<T, E> for Fold<P, F, E>
+where
+    T: Clone,
+    P: Parser<T, E>,
+    Q: Parser<T, E>,
+    F: Fn(T) -> Q + Clone,
+{
+    fn parse<'s>(&self, source: &'s str, location: Span) -> ParseResult<'s, T, E> {
+        self.0
+            .ref_parser()
+            .and_then(|parsed| {
+                (self.1)(parsed.clone())
+                    .fold(self.1.clone())
+                    .or(value(parsed))
+            })
+            .parse(source, location)
     }
 }
 
