@@ -856,6 +856,10 @@ impl<P: Concat> Concat for Counter<P> {
         Counter(P::empty(), 0)
     }
 
+    fn empty_at(location: Span) -> Self {
+        Counter(P::empty_at(location), 0)
+    }
+
     fn concat(self, other: Self) -> Self {
         Counter(self.0.concat(other.0), self.1 + other.1)
     }
