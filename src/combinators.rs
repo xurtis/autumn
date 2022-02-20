@@ -372,7 +372,7 @@ pub trait ParserExt<T, E>: Parser<T, E> + Sized {
     /// ```rust
     /// # use autumn::prelude::*;
     /// use std::str::FromStr;
-    /// fn foutry_two() -> impl Parser<i32> {
+    /// fn fourty_two() -> impl Parser<i32> {
     ///     digit
     ///         .multiple()
     ///         .copy_string()
